@@ -26,10 +26,13 @@ kakaotalk                        # 실행 (처음이면 설치부터)
 kakaotalk --install [설치파일]   # 설치/재설치. 새 Qt 버전(베타) 설치 파일을 직접 줄 수도 있음
 kakaotalk --autostart on|off     # 로그인 시 트레이로 자동 실행
 kakaotalk --kill                 # 강제 종료
+kakaotalk --reset                # 카카오톡 데이터 전체 삭제 후 초기화
 kakaotalk --help
 ```
 
-설정은 `~/.config/kakaotalk-debian-wrapper/env`에 쉘 변수로 적습니다.
+설정은 `kakaotalk --config`(또는 앱 메뉴의 카카오톡 아이콘 우클릭 → **설정 열기**)로 엽니다.
+`~/.config/kakaotalk-debian-wrapper/env` 파일이 옵션 설명과 함께 열리고, 줄 앞의 `#`을 지우고 값을 바꿔 저장하면
+**카카오톡을 다시 실행할 때** 적용됩니다.
 
 | 변수 | 설명 |
 |---|---|
@@ -39,8 +42,8 @@ kakaotalk --help
 | `KAKAOTALK_FULL_ACCESS=1` | Wine 기본값처럼 모든 폴더와 `Z:`(/) 드라이브를 엽니다 |
 | `KAKAOTALK_DEBUG=1` | `~/.cache/kakaotalk-debian-wrapper/`에 Wine 로그 저장 |
 
-데이터 위치: `~/.local/share/kakaotalk-debian-wrapper/prefix` (Wine prefix). 이 폴더를 지우면 카카오톡이 초기화됩니다.
-패키지를 삭제해도 이 폴더는 남으니, 완전히 지우려면 직접 삭제하세요.
+데이터 위치: `~/.local/share/kakaotalk-debian-wrapper/prefix` (Wine prefix).
+패키지를 삭제해도 이 폴더는 남으니, 완전히 지우려면 패키지를 지우기 전에 `kakaotalk --reset`을 실행하세요.
 
 ### 파일 접근 범위
 
@@ -48,15 +51,19 @@ Wine은 기본적으로 `Z:` 드라이브로 리눅스 파일 시스템 전체�
 이 패키지는 기본값으로 **다운로드, 문서, 사진 폴더만** 카카오톡에 연결하고 `Z:` 드라이브는 없앱니다.
 보낼 파일은 이 폴더들에 두면 되고, 받은 파일은 `문서/KakaoTalk Downloads`에 저장됩니다.
 
+바꾸려면 `kakaotalk --config`로 설정 파일을 열고:
+
 - 폴더 추가: `KAKAOTALK_SHARED_DIRS="Downloads Documents Pictures Desktop"` (Desktop, Music, Videos 가능)
 - 예전처럼 전부 열기: `KAKAOTALK_FULL_ACCESS=1`
+
+저장한 뒤 `kakaotalk --kill`로 완전히 종료하고 다시 실행하면 적용됩니다.
 
 보안 샌드박스는 아닙니다. 카카오톡이 불필요하게 넓은 범위를 보지 않게 하는 정도입니다.
 
 ### 한글 입력
 
-Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 fcitx/ibus를 감지해 `XMODIFIERS`를 설정하고,
-세션에 이미 `XMODIFIERS`가 있으면(kime, nimf 등) 그대로 따릅니다.
+Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 실행 중인 fcitx/ibus/kime/nimf를 감지해
+`XMODIFIERS`를 설정하고, 세션에 이미 `XMODIFIERS`가 있으면 그대로 따릅니다.
 
 | 환경 | 상태 |
 |---|---|
@@ -65,8 +72,8 @@ Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 fcitx/ib
 | GNOME (Wayland) + ibus-hangul (우분투 기본) | 테스트 예정 |
 | kime, nimf | 테스트 예정 |
 
-다른 환경에서 써 보셨다면 이슈로 결과를 알려주세요. 자동 실행을 켠 경우 카카오톡이 입력기보다 먼저 뜨면
-그 세션에서 한글 입력이 안 될 수 있습니다. 이때는 카카오톡을 다시 실행하세요.
+다른 환경에서 써 보셨다면 이슈로 결과를 알려주세요. 로그인 자동 실행 때는 입력기가 뜰 때까지 최대 15초
+기다립니다. 그래도 한글 입력이 안 되면 카카오톡을 다시 실행하세요.
 
 ### 트레이 아이콘
 

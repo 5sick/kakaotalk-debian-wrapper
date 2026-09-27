@@ -38,13 +38,87 @@ die() { notify "$*"; exit 1; }
 
 command -v wine >/dev/null || die "wine을 찾을 수 없습니다. 패키지를 다시 설치해 주세요."
 
+# Wine은 XIM으로만 입력기를 쓰므로 실행 중인 입력기에 맞춰 XMODIFIERS를 정한다.
+# 세션이 이미 XMODIFIERS를 정해뒀다면 그대로 따른다.
+find_im() {
+    if pgrep -x fcitx5 >/dev/null || pgrep -x fcitx >/dev/null; then echo fcitx
+    elif pgrep -x ibus-daemon >/dev/null; then echo ibus
+    elif pgrep -x kime >/dev/null || pgrep -x kime-xim >/dev/null; then echo kime
+    elif pgrep -x nimf >/dev/null; then echo nimf
+    fi
+}
+
 detect_im() {
     [ -n "${XMODIFIERS:-}" ] && return
-    if pgrep -x fcitx5 >/dev/null || pgrep -x fcitx >/dev/null; then
-        export XMODIFIERS=@im=fcitx
-    elif pgrep -x ibus-daemon >/dev/null; then
-        export XMODIFIERS=@im=ibus
+    im=$(find_im)
+    # 로그인 자동 실행 때는 입력기가 늦게 뜰 수 있으므로 잠시 기다린다.
+    # 입력기 없이 먼저 뜨면 그 세션 내내 한글 입력이 안 된다.
+    if [ -z "$im" ] && [ "${1:-}" = -bystartup ]; then
+        tries=0
+        while [ -z "$im" ] && [ $tries -lt 15 ]; do
+            sleep 1
+            tries=$((tries + 1))
+            im=$(find_im)
+        done
     fi
+    [ -n "$im" ] && export XMODIFIERS="@im=$im"
+    return 0
+}
+
+# GNOME에는 트레이가 없어서, AppIndicator 확장이 없으면 창을 닫았을 때 카카오톡이 사라진 것처럼 보인다
+check_tray() {
+    case "${XDG_CURRENT_DESKTOP:-}" in *GNOME*) ;; *) return 0 ;; esac
+    stamp="$APP_HOME/.tray-checked"
+    [ -e "$stamp" ] && return 0
+    command -v gnome-extensions >/dev/null || return 0
+    if ! gnome-extensions list --enabled 2>/dev/null | grep -qi appindicator; then
+        notify "GNOME에서는 AppIndicator 확장이 있어야 트레이 아이콘이 보입니다. 창을 닫아도 카카오톡은 트레이에서 계속 실행됩니다."
+    fi
+    touch "$stamp"
+}
+
+edit_config() {
+    if [ ! -f "$CONF" ]; then
+        mkdir -p "$(dirname "$CONF")"
+        cat >"$CONF" <<'EOF'
+# kakaotalk-debian-wrapper 설정
+# 앞의 #을 지우고 값을 바꾼 뒤 저장하세요. 카카오톡을 다시 실행하면 적용됩니다.
+# (완전히 다시 실행하려면: kakaotalk --kill 후 kakaotalk)
+
+# 카카오톡에서 보이는 폴더. 쓸 수 있는 이름: Downloads Documents Pictures Desktop Music Videos
+#KAKAOTALK_SHARED_DIRS="Downloads Documents Pictures"
+
+# 1로 하면 Wine 기본값처럼 모든 폴더와 Z: 드라이브(리눅스 전체)를 엽니다
+#KAKAOTALK_FULL_ACCESS=1
+
+# 글꼴 렌더링 엔진: directwrite(기본) | freetype(KDE/GNOME과 같은 모양) | gdi
+#KAKAOTALK_FONTENGINE=freetype
+
+# 설치 파일 주소 (기본: 카카오 공식 64비트 설치 파일)
+#KAKAOTALK_SETUP_URL=https://app-pc.kakaocdn.net/talk/win32/x64/KakaoTalk_Setup.exe
+
+# 1로 하면 ~/.cache/kakaotalk-debian-wrapper/ 에 Wine 로그를 남깁니다 (문제 보고용)
+#KAKAOTALK_DEBUG=1
+EOF
+    fi
+    if [ -t 0 ]; then
+        exec ${EDITOR:-${VISUAL:-nano}} "$CONF"
+    else
+        exec xdg-open "$CONF"
+    fi
+}
+
+reset_prefix() {
+    [ -d "$APP_HOME" ] || { log "초기화할 데이터가 없습니다."; return 0; }
+    if [ "${1:-}" != --yes ]; then
+        [ -t 0 ] || die "확인이 필요합니다: kakaotalk --reset --yes"
+        printf '%s 를 지웁니다. 카카오톡 로그인과 대화 기록 등 PC에 저장된 데이터가 모두 삭제됩니다. 계속할까요? [y/N] ' "$APP_HOME"
+        read -r answer
+        case "$answer" in y|Y|yes) ;; *) log "취소했습니다."; return 0 ;; esac
+    fi
+    wineserver -k 2>/dev/null || true
+    rm -rf "$APP_HOME"
+    log "초기화했습니다. 다음 실행 때 다시 설치합니다."
 }
 
 detect_dpi() {
@@ -250,8 +324,10 @@ usage() {
   (옵션 없음)            카카오톡 실행 (처음이면 설치부터 진행)
   --install [설치파일]   카카오톡 설치/재설치 (파일을 주지 않으면 공식 서버에서 받음)
   --autostart on|off     로그인 시 자동 실행
+  --config               설정 파일 열기 (공유 폴더, 글꼴 엔진 등)
   --winecfg              Wine 설정 열기
   --kill                 카카오톡과 Wine 프로세스 강제 종료
+  --reset [--yes]        카카오톡 데이터(Wine prefix) 전체 삭제 후 초기화
   --help                 이 도움말
 
 설정 파일: $CONF
@@ -269,6 +345,8 @@ case "${1:-}" in
     --init)    init_prefix; exit ;;
     --install) init_prefix; install_app "${2:-}"; exe=$(find_exe); [ -n "$exe" ] && integrate_desktop "$exe"; exit ;;
     --autostart) set_autostart "${2:-}"; exit ;;
+    --reset)   reset_prefix "${2:-}"; exit ;;
+    --config)  edit_config ;;
     --winecfg) exec winecfg ;;
     --kill)    exec wineserver -k ;;
 esac
@@ -282,7 +360,8 @@ if [ -z "$exe" ]; then
 fi
 integrate_desktop "$exe"
 
-detect_im
+detect_im "${1:-}"
+check_tray
 link_fonts
 apply_file_access
 apply_fontengine

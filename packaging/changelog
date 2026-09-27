@@ -7,6 +7,9 @@ kakaotalk-debian-wrapper (0.2.0) unstable; urgency=medium
   * Limit the Linux folders visible to KakaoTalk to Downloads, Documents and
     Pictures and remove the Z: drive by default (KAKAOTALK_SHARED_DIRS,
     KAKAOTALK_FULL_ACCESS to change).
+  * Launcher: kakaotalk --config (also in the app menu), kakaotalk --reset,
+    kime/nimf detection, wait for the input method on autostart, GNOME tray
+    extension hint.
   * README: input method status, tray icon notes, file access.
 
  -- kakaotalk-debian-wrapper contributors  Sun, 27 Sep 2026 23:30:00 +0900

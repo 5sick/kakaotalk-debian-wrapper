@@ -14,3 +14,9 @@ Keywords=kakao;kakaotalk;katalk;카카오;카톡;
 MimeType=x-scheme-handler/kakaotalk;x-scheme-handler/kakaoopen;
 StartupNotify=true
 StartupWMClass=kakaotalk.exe
+Actions=config;
+
+[Desktop Action config]
+Name=Open settings
+Name[ko]=설정 열기
+Exec=kakaotalk --config

@@ -14,5 +14,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libdbus-1-dev libgnutls28-dev \
         libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev \
         libwayland-dev wayland-protocols libxkbcommon-dev \
-        libunwind-dev libudev-dev libusb-1.0-0-dev libsdl2-dev \
+        libunwind-dev libudev-dev libusb-1.0-0-dev libsdl2-dev libv4l-dev \
     && rm -rf /var/lib/apt/lists/*

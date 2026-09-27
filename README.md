@@ -35,21 +35,56 @@ kakaotalk --help
 |---|---|
 | `KAKAOTALK_FONTENGINE=freetype` | 글꼴 렌더링 엔진 (`directwrite` 기본, `freetype`, `gdi`) |
 | `KAKAOTALK_SETUP_URL=...` | 설치 파일 주소 (기본: 공식 64비트 설치 파일) |
+| `KAKAOTALK_SHARED_DIRS="Downloads Documents Pictures"` | 카카오톡에서 보이는 폴더 (아래 참고) |
+| `KAKAOTALK_FULL_ACCESS=1` | Wine 기본값처럼 모든 폴더와 `Z:`(/) 드라이브를 엽니다 |
 | `KAKAOTALK_DEBUG=1` | `~/.cache/kakaotalk-debian-wrapper/`에 Wine 로그 저장 |
 
 데이터 위치: `~/.local/share/kakaotalk-debian-wrapper/prefix` (Wine prefix). 이 폴더를 지우면 카카오톡이 초기화됩니다.
+패키지를 삭제해도 이 폴더는 남으니, 완전히 지우려면 직접 삭제하세요.
+
+### 파일 접근 범위
+
+Wine은 기본적으로 `Z:` 드라이브로 리눅스 파일 시스템 전체를 Windows 프로그램에 보여줍니다.
+이 패키지는 기본값으로 **다운로드, 문서, 사진 폴더만** 카카오톡에 연결하고 `Z:` 드라이브는 없앱니다.
+보낼 파일은 이 폴더들에 두면 되고, 받은 파일은 `문서/KakaoTalk Downloads`에 저장됩니다.
+
+- 폴더 추가: `KAKAOTALK_SHARED_DIRS="Downloads Documents Pictures Desktop"` (Desktop, Music, Videos 가능)
+- 예전처럼 전부 열기: `KAKAOTALK_FULL_ACCESS=1`
+
+보안 샌드박스는 아닙니다. 카카오톡이 불필요하게 넓은 범위를 보지 않게 하는 정도입니다.
+
+### 한글 입력
+
+Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 fcitx/ibus를 감지해 `XMODIFIERS`를 설정하고,
+세션에 이미 `XMODIFIERS`가 있으면(kime, nimf 등) 그대로 따릅니다.
+
+| 환경 | 상태 |
+|---|---|
+| KDE Plasma (X11) + fcitx5 | ✅ 확인됨 |
+| KDE Plasma (Wayland) + fcitx5 | 테스트 예정 |
+| GNOME (Wayland) + ibus-hangul (우분투 기본) | 테스트 예정 |
+| kime, nimf | 테스트 예정 |
+
+다른 환경에서 써 보셨다면 이슈로 결과를 알려주세요. 자동 실행을 켠 경우 카카오톡이 입력기보다 먼저 뜨면
+그 세션에서 한글 입력이 안 될 수 있습니다. 이때는 카카오톡을 다시 실행하세요.
+
+### 트레이 아이콘
+
+카카오톡을 닫으면 트레이로 들어갑니다. KDE, Xfce, Cinnamon 등은 바로 보이고,
+**GNOME은 트레이가 없어서** [AppIndicator 확장](https://extensions.gnome.org/extension/615/appindicator-support/)이
+필요합니다 (우분투는 기본 설치됨).
 
 ## 기존 Wine/Bottles와 무엇이 다른가
 
 - **Wine 동봉**: 배포판의 Wine 버전에 상관없이 검증한 Wine 11(wow64)을 씁니다. 시스템 Wine과 충돌하지 않습니다.
-- **카카오톡용 패치**: 창을 드래그한 뒤 마우스를 따라다니는 문제 등을 Wine 쪽에서 고쳤습니다 ([patches/](patches/)).
+- **카카오톡용 패치**: 창을 드래그한 뒤 마우스를 따라다니는 문제, 알림 팝업과 툴팁 둘레가 검게 나오는 문제를 Wine 쪽에서 고쳤습니다 ([patches/](patches/)).
 - **한국어 환경 자동 설정**: 맑은 고딕 → Noto Sans CJK KR 대체, 화면 배율(DPI), fcitx/ibus 입력기.
 - **데스크톱 통합**: 앱 메뉴, 설치된 카카오톡에서 추출한 아이콘, `kakaotalk://` 링크, 자동 실행.
 
 ## 알려진 문제
 
-- 새 Qt 버전의 알림 팝업 둘레가 검게 보입니다 (Wine이 OpenGL 창의 투명도를 지원하지 않음). 수정 작업 중입니다.
-- 음성/영상 통화는 아직 검증하지 않았습니다.
+- 음성 통화는 확인했고, 영상 통화(카메라)는 v0.2.0에서 지원을 켰지만 아직 검증 중입니다.
+- 창의 투명도는 컴포지터(KWin, Mutter 등)가 켜져 있어야 적용됩니다.
 
 ## 직접 빌드하기
 

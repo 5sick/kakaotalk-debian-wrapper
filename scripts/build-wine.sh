@@ -61,7 +61,6 @@ if [ ! -f Makefile ]; then
         --without-capi \
         --without-sane \
         --without-cups \
-        --without-v4l2 \
         CFLAGS="$OPTFLAGS" CROSSCFLAGS="$OPTFLAGS" \
         >configure.log 2>&1 || { tail -30 configure.log; exit 1; }
     grep -E '^configure: (WARNING|.* not found)' configure.log || true

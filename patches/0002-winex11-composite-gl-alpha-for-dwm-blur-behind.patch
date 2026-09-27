@@ -1,0 +1,259 @@
+diff --git a/dlls/dwmapi/dwmapi_main.c b/dlls/dwmapi/dwmapi_main.c
+index 4b881b4..398d958 100644
+--- a/dlls/dwmapi/dwmapi_main.c
++++ b/dlls/dwmapi/dwmapi_main.c
+@@ -162,9 +162,20 @@ HRESULT WINAPI DwmGetGraphicsStreamTransformHint(UINT uIndex, MilMatrix3x2D *pTr
+  */
+ HRESULT WINAPI DwmEnableBlurBehindWindow(HWND hWnd, const DWM_BLURBEHIND *pBlurBuf)
+ {
+-    FIXME("%p %p\n", hWnd, pBlurBuf);
++    TRACE("%p %p\n", hWnd, pBlurBuf);
+ 
+-    return E_NOTIMPL;
++    if (!pBlurBuf) return E_INVALIDARG;
++    if (!IsWindow(hWnd)) return E_HANDLE;
++
++    /* We can't blur, but apps mostly use this (with an empty blur region) to get
++     * per-pixel alpha composition of their GL/D3D content. The graphics driver
++     * looks for this property when creating the window's GL surface. */
++    if (pBlurBuf->dwFlags & DWM_BB_ENABLE)
++    {
++        if (pBlurBuf->fEnable) SetPropW(hWnd, L"__wine_dwm_blur_behind", (HANDLE)1);
++        else RemovePropW(hWnd, L"__wine_dwm_blur_behind");
++    }
++    return S_OK;
+ }
+ 
+ /**********************************************************************
+diff --git a/dlls/winex11.drv/init.c b/dlls/winex11.drv/init.c
+index 09ef2bf..06cc7ea 100644
+--- a/dlls/winex11.drv/init.c
++++ b/dlls/winex11.drv/init.c
+@@ -477,23 +477,20 @@ static int visual_class_alloc( int class )
+     return class == PseudoColor || class == GrayScale || class == DirectColor ? AllocAll : AllocNone;
+ }
+ 
+-Window x11drv_client_surface_create( HWND hwnd, int format, struct client_surface **client )
++static Window client_surface_create_with_visual( HWND hwnd, const XVisualInfo *visual, struct client_surface **client )
+ {
+     struct x11drv_client_surface *surface;
+-    XVisualInfo visual = default_visual;
+     Colormap colormap;
+ 
+-    if (format && !visual_from_pixel_format( format, &visual )) return None;
+-
+-    if (visual.visualid == default_visual.visualid) colormap = default_colormap;
+-    else colormap = XCreateColormap( gdi_display, get_dummy_parent(), visual.visual, visual_class_alloc( visual.class ) );
++    if (visual->visualid == default_visual.visualid) colormap = default_colormap;
++    else colormap = XCreateColormap( gdi_display, get_dummy_parent(), visual->visual, visual_class_alloc( visual->class ) );
+     if (!colormap) return None;
+ 
+     if (!(surface = client_surface_create( sizeof(*surface), &x11drv_client_surface_funcs, hwnd ))) goto failed;
+     surface->colormap = colormap;
+ 
+     if (!get_surface_rect( hwnd, &surface->rect, NtUserGetDpiForWindow( hwnd ) )) goto failed;
+-    if (!(surface->window = create_client_window( hwnd, surface->rect, &visual, colormap ))) goto failed;
++    if (!(surface->window = create_client_window( hwnd, surface->rect, visual, colormap ))) goto failed;
+ 
+     TRACE( "Created %s for client window %lx\n", debugstr_client_surface( &surface->client ), surface->window );
+     *client = &surface->client;
+@@ -505,6 +502,29 @@ failed:
+     return None;
+ }
+ 
++Window x11drv_client_surface_create( HWND hwnd, int format, struct client_surface **client )
++{
++    XVisualInfo visual = default_visual;
++
++    if (format && !visual_from_pixel_format( format, &visual )) return None;
++    return client_surface_create_with_visual( hwnd, &visual, client );
++}
++
++/* create a client surface with a 32-bit ARGB visual, for GL content that needs alpha
++ * composition. The top-level X window needs an ARGB visual too, or the compositor
++ * would drop the alpha channel. */
++Window x11drv_client_surface_create_alpha( HWND hwnd, const XVisualInfo *visual, struct client_surface **client )
++{
++    struct x11drv_win_data *data;
++
++    if (!(data = get_win_data( hwnd ))) return None;
++    data->gl_alpha = TRUE;
++    set_window_visual( data, &argb_visual, TRUE );
++    release_win_data( data );
++
++    return client_surface_create_with_visual( hwnd, visual, client );
++}
++
+ /**********************************************************************
+  *           ExtEscape  (X11DRV.@)
+  */
+diff --git a/dlls/winex11.drv/opengl.c b/dlls/winex11.drv/opengl.c
+index 01eb3b9..8bc360c 100644
+--- a/dlls/winex11.drv/opengl.c
++++ b/dlls/winex11.drv/opengl.c
+@@ -521,15 +521,67 @@ static BOOL x11drv_egl_describe_pixel_format( int format, struct wgl_pixel_forma
+     return TRUE;
+ }
+ 
++/* find a config like the pixel format's one, but with an ARGB visual so that its
++ * alpha channel can be composited. Contexts are created without a config, so any
++ * config works with them. */
++static BOOL egl_find_alpha_config( int format, EGLConfig *config, XVisualInfo *visual )
++{
++    static const EGLint attribs[] =
++    {
++        EGL_RED_SIZE, EGL_GREEN_SIZE, EGL_BLUE_SIZE, EGL_ALPHA_SIZE, EGL_DEPTH_SIZE,
++        EGL_STENCIL_SIZE, EGL_SAMPLES, EGL_COLOR_BUFFER_TYPE,
++    };
++    EGLConfig base = egl_config_for_format( format );
++    EGLint want[ARRAY_SIZE(attribs)], value, type;
++    XVisualInfo template = {0}, *visuals;
++    UINT i, j;
++    int count;
++
++    for (j = 0; j < ARRAY_SIZE(attribs); j++)
++        funcs->p_eglGetConfigAttrib( egl->display, base, attribs[j], &want[j] );
++    if (!want[3]) return FALSE; /* the app didn't ask for alpha */
++
++    for (i = 0; i < egl->config_count; i++)
++    {
++        funcs->p_eglGetConfigAttrib( egl->display, egl->configs[i], EGL_SURFACE_TYPE, &type );
++        if (!(type & EGL_WINDOW_BIT)) continue;
++        for (j = 0; j < ARRAY_SIZE(attribs); j++)
++        {
++            funcs->p_eglGetConfigAttrib( egl->display, egl->configs[i], attribs[j], &value );
++            if (value != want[j]) break;
++        }
++        if (j < ARRAY_SIZE(attribs)) continue;
++
++        funcs->p_eglGetConfigAttrib( egl->display, egl->configs[i], EGL_NATIVE_VISUAL_ID, (EGLint *)&template.visualid );
++        if (!(visuals = XGetVisualInfo( gdi_display, VisualIDMask, &template, &count ))) continue;
++        *visual = *visuals;
++        XFree( visuals );
++        if (visual->depth != 32) continue;
++
++        TRACE( "using config %p with ARGB visual %#lx for format %d\n", egl->configs[i], visual->visualid, format );
++        *config = egl->configs[i];
++        return TRUE;
++    }
++
++    WARN( "no ARGB config found for format %d\n", format );
++    return FALSE;
++}
++
+ static BOOL x11drv_egl_surface_create( HWND hwnd, int format, struct opengl_drawable **drawable )
+ {
++    EGLConfig config = egl_config_for_format( format );
+     struct opengl_drawable *previous;
+     struct client_surface *client;
+     struct gl_drawable *gl;
++    XVisualInfo visual;
+     Window window;
+ 
+     if ((previous = *drawable) && previous->format == format) return TRUE;
+-    if (!(window = x11drv_client_surface_create( hwnd, format, &client ))) return FALSE;
++    if (window_wants_gl_alpha( hwnd ) && egl_find_alpha_config( format, &config, &visual ))
++        window = x11drv_client_surface_create_alpha( hwnd, &visual, &client );
++    else
++        window = x11drv_client_surface_create( hwnd, format, &client );
++    if (!window) return FALSE;
+     gl = opengl_drawable_create( sizeof(*gl), &x11drv_egl_surface_funcs, format, client );
+     client_surface_release( client );
+     if (!gl) return FALSE;
+@@ -538,8 +590,7 @@ static BOOL x11drv_egl_surface_create( HWND hwnd, int format, struct opengl_draw
+     gl->base.buffer_map[GL_FRONT - GL_FRONT_LEFT] = GL_BACK;
+     gl->base.buffer_map[GL_FRONT_AND_BACK - GL_FRONT_LEFT] = GL_BACK;
+ 
+-    if (!(gl->base.surface = funcs->p_eglCreateWindowSurface( egl->display, egl_config_for_format( format ),
+-                                                              (void *)window, NULL )))
++    if (!(gl->base.surface = funcs->p_eglCreateWindowSurface( egl->display, config, (void *)window, NULL )))
+     {
+         opengl_drawable_release( &gl->base );
+         return FALSE;
+diff --git a/dlls/winex11.drv/window.c b/dlls/winex11.drv/window.c
+index 7ff9b88..9570980 100644
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -2557,6 +2557,35 @@ void set_window_visual( struct x11drv_win_data *data, const XVisualInfo *vis, BO
+ }
+ 
+ 
++/***********************************************************************
++ *		reset_window_visual
++ *
++ * Go back to the default visual, unless the window GL content needs alpha composition.
++ */
++void reset_window_visual( struct x11drv_win_data *data )
++{
++    if (data->gl_alpha && argb_visual.visualid) set_window_visual( data, &argb_visual, TRUE );
++    else set_window_visual( data, &default_visual, FALSE );
++}
++
++
++/***********************************************************************
++ *		window_wants_gl_alpha
++ *
++ * Whether GL content of a top-level window should be composited with its alpha
++ * channel, which the app requests with DwmEnableBlurBehindWindow.
++ */
++BOOL window_wants_gl_alpha( HWND hwnd )
++{
++    static const WCHAR blur_behindW[] =
++        {'_','_','w','i','n','e','_','d','w','m','_','b','l','u','r','_','b','e','h','i','n','d',0};
++
++    if (!argb_visual.visualid) return FALSE;
++    if (NtUserGetAncestor( hwnd, GA_PARENT ) != NtUserGetDesktopWindow()) return FALSE;
++    return NtUserGetProp( hwnd, blur_behindW ) != 0;
++}
++
++
+ /*****************************************************************
+  *		SetWindowText   (X11DRV.@)
+  */
+@@ -2599,7 +2628,7 @@ void X11DRV_SetWindowStyle( HWND hwnd, INT offset, STYLESTRUCT *style )
+         if (changed & WS_EX_LAYERED) /* changing WS_EX_LAYERED resets attributes */
+         {
+             data->layered = FALSE;
+-            set_window_visual( data, &default_visual, FALSE );
++            reset_window_visual( data );
+             sync_window_opacity( data->display, data->whole_window, 0, 0 );
+         }
+         if (changed & WS_EX_TRANSPARENT) sync_window_style( data );
+@@ -3443,7 +3472,7 @@ void X11DRV_SetLayeredWindowAttributes( HWND hwnd, COLORREF key, BYTE alpha, DWO
+ 
+     if (data)
+     {
+-        set_window_visual( data, &default_visual, FALSE );
++        reset_window_visual( data );
+ 
+         if (data->whole_window)
+         {
+diff --git a/dlls/winex11.drv/x11drv.h b/dlls/winex11.drv/x11drv.h
+index 9232988..26ada71 100644
+--- a/dlls/winex11.drv/x11drv.h
++++ b/dlls/winex11.drv/x11drv.h
+@@ -369,6 +369,8 @@ extern void set_dc_drawable( HDC hdc, Drawable drawable, const RECT *rect, int m
+ extern Drawable get_dc_drawable( HDC hdc, RECT *rect );
+ extern HRGN get_dc_monitor_region( HWND hwnd, HDC hdc );
+ extern Window x11drv_client_surface_create( HWND hwnd, int format, struct client_surface **client );
++extern Window x11drv_client_surface_create_alpha( HWND hwnd, const XVisualInfo *visual, struct client_surface **client );
++extern BOOL window_wants_gl_alpha( HWND hwnd );
+ 
+ /**************************************************************************
+  * X11 USER driver
+@@ -670,6 +672,7 @@ struct x11drv_win_data
+     UINT        shaped : 1;     /* is window using a custom region shape? */
+     UINT        layered : 1;    /* is window layered and with valid attributes? */
+     UINT        use_alpha : 1;  /* does window use an alpha channel? */
++    UINT        gl_alpha : 1;   /* does window's GL content need alpha composition (DWM blur behind)? */
+     UINT        skip_taskbar : 1; /* does window should be deleted from taskbar */
+     UINT        add_taskbar : 1; /* does window should be added to taskbar regardless of style */
+     UINT        is_fullscreen : 1; /* is the window visible rect fullscreen */
+@@ -728,6 +731,7 @@ extern void detach_client_window( struct x11drv_win_data *data, Window client_wi
+ extern void attach_client_window( struct x11drv_win_data *data, Window client_window );
+ extern void destroy_client_window( HWND hwnd, Window client_window );
+ extern void set_window_visual( struct x11drv_win_data *data, const XVisualInfo *vis, BOOL use_alpha );
++extern void reset_window_visual( struct x11drv_win_data *data );
+ extern void change_systray_owner( Display *display, Window systray_window );
+ extern BOOL update_clipboard( HWND hwnd );
+ extern void init_win_context(void);

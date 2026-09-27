@@ -1,3 +1,16 @@
+kakaotalk-debian-wrapper (0.2.0) unstable; urgency=medium
+
+  * Wine patch: composite GL content with alpha for windows that request
+    DWM blur-behind, so notification popups and tooltips are no longer drawn
+    with black borders.
+  * Enable camera (V4L2) support in the bundled Wine for video calls.
+  * Limit the Linux folders visible to KakaoTalk to Downloads, Documents and
+    Pictures and remove the Z: drive by default (KAKAOTALK_SHARED_DIRS,
+    KAKAOTALK_FULL_ACCESS to change).
+  * README: input method status, tray icon notes, file access.
+
+ -- kakaotalk-debian-wrapper contributors  Sun, 27 Sep 2026 23:30:00 +0900
+
 kakaotalk-debian-wrapper (0.1.0) unstable; urgency=medium
 
   * Initial release.

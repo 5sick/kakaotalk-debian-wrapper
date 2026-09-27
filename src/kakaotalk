@@ -198,7 +198,8 @@ find_exe() {
 }
 
 # prefix 레지스트리 설정. 내용을 바꾸면 TWEAKS_VERSION을 올려서 기존 prefix에도 다시 적용되게 한다.
-TWEAKS_VERSION=3
+TWEAKS_VERSION=4
+OPEN_HELPER="/usr/lib/$APP/open"
 
 apply_tweaks() {
     dpi=$(detect_dpi)
@@ -207,7 +208,32 @@ apply_tweaks() {
     mkdir -p "$WINEPREFIX/drive_c/crashdumps"
     reg=$(mktemp --suffix=.reg)
     # 한글 값이 있으므로 UTF-16 .reg(버전 5)로 쓴다. REGEDIT4는 ANSI(CP949)로 읽혀 깨진다.
-    iconv -f UTF-8 -t UTF-16 >"$reg" <<EOF
+    { tweaks_reg; open_with_linux_reg; } | iconv -f UTF-8 -t UTF-16 >"$reg"
+    # /reg:64: 64비트 뷰에 써야 64비트 카카오톡이 읽는다 (Wow6432Node 아님)
+    wine reg import "$reg" /reg:64 >/dev/null 2>&1
+    wineserver -w
+    rm -f "$reg"
+    echo "$TWEAKS_VERSION:$dpi" >"$stamp"
+}
+
+# 카카오톡에서 받은 파일을 열 때 Wine 쪽 프로그램(또는 연결 없음) 대신 리눅스 기본 앱으로 연다
+OPEN_WITH_LINUX_EXTS="txt log csv jpg jpeg png gif bmp webp heic svg mp4 mov avi mkv webm m4v
+    mp3 m4a wav ogg flac aac pdf doc docx xls xlsx ppt pptx hwp hwpx odt ods odp rtf zip 7z rar
+    tar gz html htm"
+
+open_with_linux_reg() {
+    cat <<EOF
+[HKEY_CLASSES_ROOT\\LinuxDefaultApp\\shell\\open\\command]
+@="\\"C:\\\\windows\\\\system32\\\\winebrowser.exe\\" \\"%1\\""
+
+EOF
+    for ext in $OPEN_WITH_LINUX_EXTS; do
+        printf '[HKEY_CLASSES_ROOT\\.%s]\n@="LinuxDefaultApp"\n\n' "$ext"
+    done
+}
+
+tweaks_reg() {
+    cat <<EOF
 Windows Registry Editor Version 5.00
 
 [-HKEY_CURRENT_USER\\Software\\Wine\\Fonts\\Replacements]
@@ -222,16 +248,26 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\\Control Panel\\Desktop]
 "LogPixels"=dword:$(printf '%08x' "$dpi")
 
+; 폴더는 Wine 탐색기 대신 리눅스 파일 관리자로 연다.
+; winebrowser가 경로를 file:// 로 바꿔 OPEN_HELPER(없으면 xdg-open)에 넘긴다.
+[HKEY_CURRENT_USER\\Software\\Wine\\WineBrowser]
+"Browsers"="$OPEN_HELPER,xdg-open"
+
+[HKEY_CLASSES_ROOT\\Folder\\shell\\open\\command]
+@="\\"C:\\\\windows\\\\system32\\\\winebrowser.exe\\" \\"%1\\""
+
+; ddeexec가 있으면 명령 대신 DDE로 Wine 탐색기에 요청하므로 지운다
+[-HKEY_CLASSES_ROOT\\Folder\\shell\\open\\ddeexec]
+
+[HKEY_CLASSES_ROOT\\Directory\\shell\\open\\command]
+@="\\"C:\\\\windows\\\\system32\\\\winebrowser.exe\\" \\"%1\\""
+
 ; 크래시 시 winedbg가 멈춰 있지 않고 덤프만 남기고 끝나게 한다
 [HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug]
 "Debugger"="winedbg --minidump C:\\\\crashdumps\\\\kakaotalk.mdmp %ld %ld"
 "Auto"="1"
+
 EOF
-    # /reg:64: 64비트 뷰에 써야 64비트 카카오톡이 읽는다 (Wow6432Node 아님)
-    wine reg import "$reg" /reg:64 >/dev/null 2>&1
-    wineserver -w
-    rm -f "$reg"
-    echo "$TWEAKS_VERSION:$dpi" >"$stamp"
 }
 
 init_prefix() {

@@ -27,6 +27,7 @@ mkdir -p "$STAGE/DEBIAN" "$STAGE/usr/bin" "$STAGE/opt/$PKG" "$DOC/wine-patches" 
          "$STAGE/usr/share/applications" "$STAGE/usr/share/icons/hicolor/scalable/apps"
 
 install -m755 "$ROOT/src/kakaotalk" "$STAGE/usr/bin/kakaotalk"
+install -D -m755 "$ROOT/src/open-helper" "$STAGE/usr/lib/$PKG/open"
 install -m644 "$ROOT/src/$PKG.desktop" "$STAGE/usr/share/applications/$PKG.desktop"
 install -m644 "$ROOT/src/$PKG.svg" "$STAGE/usr/share/icons/hicolor/scalable/apps/$PKG.svg"
 cp -a "$WINE_DIR" "$STAGE/opt/$PKG/wine"

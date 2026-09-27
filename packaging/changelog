@@ -6,8 +6,8 @@ kakaotalk-debian-wrapper (0.2.0) unstable; urgency=medium
   * Wine patch: pass the app minimum window size (WM_GETMINMAXINFO) to the
     window manager, so windows can no longer be shrunk to a thin line.
   * Enable camera (V4L2) support in the bundled Wine for video calls.
-  * Open folders and received files (images, videos, documents, hwp, ...) with
-    the Linux file manager and default apps instead of Wine programs.
+  * Open received files (images, videos, documents, hwp, ...) with the Linux
+    default apps instead of Wine programs.
   * Limit the Linux folders visible to KakaoTalk to Downloads, Documents and
     Pictures and remove the Z: drive by default (KAKAOTALK_SHARED_DIRS,
     KAKAOTALK_FULL_ACCESS to change).

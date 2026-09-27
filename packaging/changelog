@@ -3,6 +3,8 @@ kakaotalk-debian-wrapper (0.2.0) unstable; urgency=medium
   * Wine patch: composite GL content with alpha for windows that request
     DWM blur-behind, so notification popups and tooltips are no longer drawn
     with black borders.
+  * Wine patch: pass the app minimum window size (WM_GETMINMAXINFO) to the
+    window manager, so windows can no longer be shrunk to a thin line.
   * Enable camera (V4L2) support in the bundled Wine for video calls.
   * Limit the Linux folders visible to KakaoTalk to Downloads, Documents and
     Pictures and remove the Z: drive by default (KAKAOTALK_SHARED_DIRS,

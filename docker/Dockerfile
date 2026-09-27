@@ -4,7 +4,7 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        build-essential flex bison curl ca-certificates xz-utils patch file \
+        build-essential flex bison curl ca-certificates xz-utils patch file ccache \
         mingw-w64 gcc-multilib \
         libx11-dev libxext-dev libxrandr-dev libxi-dev libxcursor-dev \
         libxcomposite-dev libxinerama-dev libxfixes-dev libxrender-dev libxxf86vm-dev \

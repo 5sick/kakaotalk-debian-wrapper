@@ -50,10 +50,18 @@ if [ ! -f "$WORK/src/configure" ]; then
     done
 fi
 
+# ccache가 있으면 쓴다. 다시 빌드할 때(CI 포함) 바뀐 파일만 컴파일된다.
+if command -v ccache >/dev/null; then
+    export CCACHE_DIR="${CCACHE_DIR:-$ROOT/build/ccache}"
+    set -- CC="ccache gcc" i386_CC="ccache i686-w64-mingw32-gcc" x86_64_CC="ccache x86_64-w64-mingw32-gcc"
+else
+    set --
+fi
+
 cd "$WORK/obj"
 if [ ! -f Makefile ]; then
     echo ">> configure ($FLAVOR)"
-    ../src/configure \
+    ../src/configure "$@" \
         --prefix="$DEST" \
         --enable-archs=i386,x86_64 \
         --disable-tests \
@@ -68,6 +76,7 @@ fi
 
 echo ">> make -j$JOBS"
 make -j"$JOBS" >make.log 2>&1 || { tail -40 make.log; exit 1; }
+command -v ccache >/dev/null && ccache -s | grep -E -i 'hits|misses' | head -3 || true
 
 echo ">> install → $DEST"
 rm -rf "$DEST"

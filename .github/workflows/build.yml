@@ -1,0 +1,70 @@
+# Wine 빌드 → .deb 생성 → 배포판 설치 테스트 → (v* 태그일 때) 릴리스
+name: build
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  WINE_VERSION: '11.0'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check version matches tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          test "v$(cat VERSION)" = "${GITHUB_REF_NAME}" || {
+            echo "VERSION ($(cat VERSION)) does not match tag ${GITHUB_REF_NAME}"; exit 1; }
+
+      - name: Restore ccache
+        uses: actions/cache@v4
+        with:
+          path: build/ccache
+          key: ccache-wine-${{ env.WINE_VERSION }}-${{ hashFiles('patches/*.patch', 'docker/Dockerfile', 'scripts/build-wine.sh') }}
+          restore-keys: ccache-wine-${{ env.WINE_VERSION }}-
+
+      - name: Build Wine (Ubuntu 22.04 container)
+        run: JOBS=$(nproc) scripts/build-wine-docker.sh "$WINE_VERSION"
+
+      - name: Build .deb
+        env:
+          MAINTAINER: '5sick <213179368+5sick@users.noreply.github.com>'
+          HOMEPAGE: https://github.com/${{ github.repository }}
+        run: packaging/build-deb.sh
+
+      - name: Test install (Debian 12/13, Ubuntu 22.04/24.04)
+        run: packaging/test-install.sh debian:12 debian:13 ubuntu:22.04 ubuntu:24.04
+
+      - name: Checksums
+        run: |
+          cp "build/wine-$WINE_VERSION.tar.xz" dist/
+          cd dist && sha256sum *.deb "wine-$WINE_VERSION.tar.xz" > SHA256SUMS && cat SHA256SUMS
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: kakaotalk-debian-wrapper
+          path: |
+            dist/*.deb
+            dist/SHA256SUMS
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 릴리스 노트: changelog의 최신 항목 + 공통 안내
+          {
+            awk 'NR==1 {next} /^ --/ {exit} {sub(/^  /, ""); print}' packaging/changelog
+            cat packaging/release-notes.md
+          } > /tmp/notes.md
+          gh release create "$GITHUB_REF_NAME" dist/*.deb "dist/wine-$WINE_VERSION.tar.xz" dist/SHA256SUMS \
+            --title "$GITHUB_REF_NAME" --notes-file /tmp/notes.md

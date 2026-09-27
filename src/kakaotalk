@@ -1,0 +1,257 @@
+#!/bin/sh
+# kakaotalk-debian-wrapper: Windows용 카카오톡을 전용 Wine prefix에서 실행하는 런처
+# SPDX-License-Identifier: MIT
+set -eu
+
+APP=kakaotalk-debian-wrapper
+APP_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/$APP"
+CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/$APP"
+CONF="${XDG_CONFIG_HOME:-$HOME/.config}/$APP/env"
+BUNDLED_WINE="/opt/$APP/wine"
+SETUP_URL_DEFAULT="https://app-pc.kakaocdn.net/talk/win32/x64/KakaoTalk_Setup.exe"
+
+[ -f "$CONF" ] && . "$CONF"
+
+# Wine 선택: KAKAOTALK_WINE > 패키지 동봉 Wine > 시스템 wine
+if [ -n "${KAKAOTALK_WINE:-}" ]; then
+    export PATH="$KAKAOTALK_WINE/bin:$PATH"
+elif [ -x "$BUNDLED_WINE/bin/wine" ]; then
+    export PATH="$BUNDLED_WINE/bin:$PATH"
+fi
+
+export WINEPREFIX="$APP_HOME/prefix"
+export WINEARCH=win64
+export WINEDEBUG="${WINEDEBUG:--all}"
+export WINEDLLOVERRIDES="${WINEDLLOVERRIDES:-winemenubuilder.exe=d;mscoree=d;mshtml=d}"
+export LANG="${KAKAOTALK_LANG:-ko_KR.UTF-8}"
+# Qt6 버전(KakaoTalkUI)용. Wine에서는 d3d11보다 OpenGL 경로가 안정적이다.
+export QSG_RHI_BACKEND="${QSG_RHI_BACKEND:-opengl}"
+
+log() { printf 'kakaotalk: %s\n' "$*" >&2; }
+
+notify() {
+    log "$*"
+    command -v notify-send >/dev/null && notify-send -a KakaoTalk -i "$APP" "KakaoTalk" "$*" 2>/dev/null || true
+}
+
+die() { notify "$*"; exit 1; }
+
+command -v wine >/dev/null || die "wine을 찾을 수 없습니다. 패키지를 다시 설치해 주세요."
+
+detect_im() {
+    [ -n "${XMODIFIERS:-}" ] && return
+    if pgrep -x fcitx5 >/dev/null || pgrep -x fcitx >/dev/null; then
+        export XMODIFIERS=@im=fcitx
+    elif pgrep -x ibus-daemon >/dev/null; then
+        export XMODIFIERS=@im=ibus
+    fi
+}
+
+detect_dpi() {
+    dpi=$(xrdb -query 2>/dev/null | awk '/^Xft.dpi:/ {print int($2)}')
+    if [ -z "$dpi" ] && command -v gsettings >/dev/null; then
+        scale=$(gsettings get org.gnome.desktop.interface scaling-factor 2>/dev/null | awk '{print $NF}')
+        text=$(gsettings get org.gnome.desktop.interface text-scaling-factor 2>/dev/null)
+        dpi=$(awk -v s="${scale:-0}" -v t="${text:-1}" 'BEGIN { if (s < 1) s = 1; printf "%d", 96 * s * t + 0.5 }')
+    fi
+    echo "${dpi:-96}"
+}
+
+# Qt 폰트 엔진: directwrite(Qt 기본) | freetype(KDE/GNOME과 같은 렌더링) | gdi
+apply_fontengine() {
+    case "${KAKAOTALK_FONTENGINE:-directwrite}" in
+        freetype|gdi) export QT_QPA_PLATFORM="windows:fontengine=$KAKAOTALK_FONTENGINE" ;;
+    esac
+}
+
+# 시스템 CJK 폰트를 prefix 폰트 폴더에 링크 (Qt freetype 엔진은 파일 경로가 필요)
+link_fonts() {
+    fontdir="$WINEPREFIX/drive_c/windows/Fonts"
+    for f in /usr/share/fonts/opentype/noto/NotoSansCJK-*.ttc; do
+        [ -e "$f" ] || continue
+        [ -e "$fontdir/${f##*/}" ] || ln -s "$f" "$fontdir/${f##*/}"
+    done
+}
+
+find_exe() {
+    for d in "$WINEPREFIX/drive_c/users/${USER:-$(id -un)}/AppData/Local/Programs/Kakao/KakaoTalk" \
+             "$WINEPREFIX/drive_c/Program Files/Kakao/KakaoTalk" \
+             "$WINEPREFIX/drive_c/Program Files (x86)/Kakao/KakaoTalk"; do
+        for exe in "$d/bin/KakaoTalkUI.exe" "$d/KakaoTalk.exe"; do
+            [ -f "$exe" ] && { echo "$exe"; return; }
+        done
+    done
+    find "$WINEPREFIX/drive_c" \( -name KakaoTalkUI.exe -o -name KakaoTalk.exe \) -print -quit 2>/dev/null
+}
+
+# prefix 레지스트리 설정. 내용을 바꾸면 TWEAKS_VERSION을 올려서 기존 prefix에도 다시 적용되게 한다.
+TWEAKS_VERSION=3
+
+apply_tweaks() {
+    dpi=$(detect_dpi)
+    stamp="$APP_HOME/.tweaks-version"
+    [ "$(cat "$stamp" 2>/dev/null)" = "$TWEAKS_VERSION:$dpi" ] && return
+    mkdir -p "$WINEPREFIX/drive_c/crashdumps"
+    reg=$(mktemp --suffix=.reg)
+    # 한글 값이 있으므로 UTF-16 .reg(버전 5)로 쓴다. REGEDIT4는 ANSI(CP949)로 읽혀 깨진다.
+    iconv -f UTF-8 -t UTF-16 >"$reg" <<EOF
+Windows Registry Editor Version 5.00
+
+[-HKEY_CURRENT_USER\\Software\\Wine\\Fonts\\Replacements]
+
+[HKEY_CURRENT_USER\\Software\\Wine\\Fonts\\Replacements]
+"Malgun Gothic"="Noto Sans CJK KR"
+"맑은 고딕"="Noto Sans CJK KR"
+"Gulim"="Noto Sans CJK KR"
+"Dotum"="Noto Sans CJK KR"
+"Segoe UI"="Noto Sans CJK KR"
+
+[HKEY_CURRENT_USER\\Control Panel\\Desktop]
+"LogPixels"=dword:$(printf '%08x' "$dpi")
+
+; 크래시 시 winedbg가 멈춰 있지 않고 덤프만 남기고 끝나게 한다
+[HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug]
+"Debugger"="winedbg --minidump C:\\\\crashdumps\\\\kakaotalk.mdmp %ld %ld"
+"Auto"="1"
+EOF
+    # /reg:64: 64비트 뷰에 써야 64비트 카카오톡이 읽는다 (Wow6432Node 아님)
+    wine reg import "$reg" /reg:64 >/dev/null 2>&1
+    wineserver -w
+    rm -f "$reg"
+    echo "$TWEAKS_VERSION:$dpi" >"$stamp"
+}
+
+init_prefix() {
+    if [ ! -f "$WINEPREFIX/system.reg" ]; then
+        notify "처음 실행 준비 중입니다. 잠시만 기다려 주세요."
+        mkdir -p "$APP_HOME"
+        wineboot -i >/dev/null 2>&1
+        wineserver -w
+    fi
+    apply_tweaks
+}
+
+find_setup() {
+    for f in "$HOME/Downloads/KakaoTalk_Setup.exe" "$HOME/다운로드/KakaoTalk_Setup.exe"; do
+        [ -f "$f" ] && { echo "$f"; return; }
+    done
+    url="${KAKAOTALK_SETUP_URL:-$SETUP_URL_DEFAULT}"
+    mkdir -p "$CACHE_DIR"
+    notify "카카오 공식 서버에서 설치 파일을 내려받는 중입니다."
+    curl -fL --retry 3 -o "$CACHE_DIR/KakaoTalk_Setup.exe.part" "$url" >&2 || die "설치 파일을 내려받지 못했습니다: $url"
+    mv "$CACHE_DIR/KakaoTalk_Setup.exe.part" "$CACHE_DIR/KakaoTalk_Setup.exe"
+    echo "$CACHE_DIR/KakaoTalk_Setup.exe"
+}
+
+install_app() {
+    setup="${1:-}"
+    [ -n "$setup" ] || setup=$(find_setup)
+    [ -f "$setup" ] || die "설치 파일이 없습니다: $setup"
+    log "설치: $setup"
+    # 카카오 이용약관을 사용자가 직접 확인하도록 기본은 설치 화면을 그대로 띄운다
+    if [ -n "${KAKAOTALK_SILENT_INSTALL:-}" ]; then
+        wine "$setup" /S
+    else
+        wine "$setup"
+    fi
+}
+
+# 설치된 exe에서 아이콘을 추출하고, 창 그룹핑용 StartupWMClass를 맞춘 사용자 .desktop을 만든다
+integrate_desktop() {
+    exe="$1"
+    class=$(basename "$exe" | tr 'A-Z' 'a-z')
+    stamp="$APP_HOME/.desktop-integrated"
+    [ "$(cat "$stamp" 2>/dev/null)" = "$class" ] && return
+
+    icondir="${XDG_DATA_HOME:-$HOME/.local/share}/icons/hicolor/256x256/apps"
+    if command -v wrestool >/dev/null && command -v icotool >/dev/null; then
+        tmp=$(mktemp -d)
+        if wrestool -x -t 14 "$exe" >"$tmp/app.ico" 2>/dev/null && [ -s "$tmp/app.ico" ]; then
+            icotool -x -o "$tmp" "$tmp/app.ico" 2>/dev/null || true
+            png=$(ls -S "$tmp"/*.png 2>/dev/null | head -1)
+            [ -n "$png" ] && mkdir -p "$icondir" && cp "$png" "$icondir/$APP.png"
+        fi
+        rm -rf "$tmp"
+    fi
+
+    src="/usr/share/applications/$APP.desktop"
+    if [ -f "$src" ]; then
+        appdir="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
+        mkdir -p "$appdir"
+        sed "s/^StartupWMClass=.*/StartupWMClass=$class/" "$src" >"$appdir/$APP.desktop"
+    fi
+    echo "$class" >"$stamp"
+}
+
+set_autostart() {
+    dir="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
+    case "${1:-}" in
+        on)
+            mkdir -p "$dir"
+            cat >"$dir/$APP.desktop" <<EOF
+[Desktop Entry]
+Type=Application
+Name=KakaoTalk
+Exec=kakaotalk -bystartup
+Icon=$APP
+X-GNOME-Autostart-enabled=true
+EOF
+            log "로그인할 때 트레이로 자동 실행합니다." ;;
+        off)
+            rm -f "$dir/$APP.desktop"
+            log "자동 실행을 껐습니다." ;;
+        *)  die "사용법: kakaotalk --autostart on|off" ;;
+    esac
+}
+
+usage() {
+    cat <<EOF
+사용법: kakaotalk [옵션] [카카오톡 인자...]
+
+  (옵션 없음)            카카오톡 실행 (처음이면 설치부터 진행)
+  --install [설치파일]   카카오톡 설치/재설치 (파일을 주지 않으면 공식 서버에서 받음)
+  --autostart on|off     로그인 시 자동 실행
+  --winecfg              Wine 설정 열기
+  --kill                 카카오톡과 Wine 프로세스 강제 종료
+  --help                 이 도움말
+
+설정 파일: $CONF
+  KAKAOTALK_FONTENGINE=freetype   글꼴 렌더링 엔진 (directwrite|freetype|gdi)
+  KAKAOTALK_SETUP_URL=...         설치 파일 주소 (기본: 예전 UI 64비트)
+  KAKAOTALK_DEBUG=1               $CACHE_DIR 에 Wine 로그 저장
+EOF
+}
+
+case "${1:-}" in
+    --help|-h) usage; exit ;;
+    --init)    init_prefix; exit ;;
+    --install) init_prefix; install_app "${2:-}"; exe=$(find_exe); [ -n "$exe" ] && integrate_desktop "$exe"; exit ;;
+    --autostart) set_autostart "${2:-}"; exit ;;
+    --winecfg) exec winecfg ;;
+    --kill)    exec wineserver -k ;;
+esac
+
+init_prefix
+exe=$(find_exe)
+if [ -z "$exe" ]; then
+    install_app
+    exe=$(find_exe)
+    [ -n "$exe" ] || die "카카오톡 설치에 실패했습니다."
+fi
+integrate_desktop "$exe"
+
+detect_im
+link_fonts
+apply_fontengine
+cd "$(dirname "$exe")"
+
+# KAKAOTALK_DEBUG=1: DLL 로드 주소와 예외를 로그 파일에 남긴다 (크래시 분석용)
+if [ -n "${KAKAOTALK_DEBUG:-}" ]; then
+    mkdir -p "$CACHE_DIR"
+    logfile="$CACHE_DIR/wine-$(date +%Y%m%d-%H%M%S).log"
+    # 창 이동 추적은 KAKAOTALK_WINEDEBUG=err+all,fixme-all,+loaddll,+seh,trace+cursor
+    export WINEDEBUG="${KAKAOTALK_WINEDEBUG:-err+all,fixme-all,+loaddll,+seh}"
+    log "디버그 로그: $logfile"
+    exec wine "$exe" "$@" 2>"$logfile"
+fi
+exec wine "$exe" "$@"

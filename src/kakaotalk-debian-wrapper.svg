@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fallback icon (original artwork, MIT). The launcher replaces it with the
+     icon extracted from the user's own KakaoTalk installation. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
+  <rect x="8" y="8" width="112" height="112" rx="26" fill="#3c4450"/>
+  <path d="M64 30c-21 0-38 13.4-38 30 0 10.6 7 19.9 17.5 25.2L40 99l15.3-9.4c2.8.5 5.7.8 8.7.8 21 0 38-13.4 38-30S85 30 64 30z" fill="#f2f2f2"/>
+  <circle cx="48" cy="60" r="5" fill="#3c4450"/>
+  <circle cx="64" cy="60" r="5" fill="#3c4450"/>
+  <circle cx="80" cy="60" r="5" fill="#3c4450"/>
+</svg>

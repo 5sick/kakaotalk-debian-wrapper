@@ -1,0 +1,29 @@
+Package: kakaotalk-debian-wrapper
+Version: @VERSION@
+Architecture: amd64
+Maintainer: @MAINTAINER@
+Installed-Size: @INSTALLED_SIZE@
+Section: net
+Priority: optional
+Homepage: @HOMEPAGE@
+Depends: libc6 (>= 2.35),
+ curl, procps,
+ fonts-noto-cjk,
+ libx11-6, libxext6, libxrandr2, libxi6, libxcursor1, libxcomposite1,
+ libxinerama1, libxfixes3, libxrender1, libxxf86vm1,
+ libfreetype6, libfontconfig1,
+ libgl1, libegl1, libvulkan1,
+ libasound2t64 | libasound2, libpulse0,
+ libdbus-1-3, libgnutls30t64 | libgnutls30,
+ libgstreamer1.0-0, libgstreamer-plugins-base1.0-0,
+ gstreamer1.0-plugins-base, gstreamer1.0-plugins-good,
+ libunwind8, libudev1, libusb-1.0-0
+Recommends: gstreamer1.0-libav, icoutils, libnotify-bin, x11-xserver-utils,
+ libsdl2-2.0-0, mesa-vulkan-drivers
+Description: Unofficial wrapper to run Windows KakaoTalk with a bundled Wine
+ Runs the Windows version of KakaoTalk in a dedicated Wine prefix with a
+ bundled, patched Wine build, Korean font and input method setup, and
+ desktop integration (menu entry, icon, kakaotalk:// links, autostart).
+ .
+ KakaoTalk itself is not included; it is downloaded from Kakao's official
+ server on first run. This project is not affiliated with Kakao Corp.

@@ -1,0 +1,16 @@
+Corresponding source for the Wine build bundled in kakaotalk-debian-wrapper @VERSION@
+==================================================================================
+
+The Wine binaries in /opt/kakaotalk-debian-wrapper/wine are licensed under the
+GNU LGPL 2.1 or later. They were built from:
+
+  1. Upstream Wine @WINE_VERSION@ source tarball
+       https://dl.winehq.org/wine/source/@WINE_VERSION@/wine-@WINE_VERSION@.tar.xz
+     A copy of this exact tarball is also attached to the GitHub release:
+       @HOMEPAGE@/releases/tag/v@VERSION@
+
+  2. The patches in /usr/share/doc/kakaotalk-debian-wrapper/wine-patches/
+     (also in the patches/ directory of the repository).
+
+  3. The build scripts scripts/build-wine.sh and scripts/build-wine-docker.sh
+     in the repository (@HOMEPAGE@), which record the exact configure options.

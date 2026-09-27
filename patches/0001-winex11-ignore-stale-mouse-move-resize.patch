@@ -1,0 +1,32 @@
+--- a/dlls/winex11.drv/mouse.c
++++ b/dlls/winex11.drv/mouse.c
+@@ -1461,6 +1461,29 @@
+     else if (NtUserGetKeyState( VK_MBUTTON ) & 0x8000) button = 2;
+     else if (NtUserGetKeyState( VK_RBUTTON ) & 0x8000) button = 3;
+ 
++    /* dir 0-8 are the mouse driven _NET_WM_MOVERESIZE_SIZE_* / _MOVE directions */
++    if (!button && dir <= 8)
++    {
++        int x, y, rootX, rootY;
++
++        /* the queue key state may lag behind, so check the real pointer state */
++        if (XQueryPointer( display, root_window, &root, &child, &rootX, &rootY, &x, &y, &xstate ))
++        {
++            if (xstate & Button1Mask) button = 1;
++            else if (xstate & Button2Mask) button = 2;
++            else if (xstate & Button3Mask) button = 3;
++        }
++
++        /* The drag already ended, e.g. the app posted SC_MOVE from a stale mouse
++         * message. Starting a WM move now would leave the window stuck to the
++         * pointer until the next click, so ignore the request. */
++        if (!button)
++        {
++            TRACE( "hwnd %p/%lx, dir %d, no button pressed, ignoring\n", hwnd, win, dir );
++            return;
++        }
++    }
++
+     TRACE( "hwnd %p/%lx, pos %s, dir %d, button %d\n", hwnd, win, wine_dbgstr_point(&pos), dir, button );
+ 
+     xev.xclient.type = ClientMessage;

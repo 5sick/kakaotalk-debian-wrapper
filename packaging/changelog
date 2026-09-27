@@ -1,0 +1,12 @@
+kakaotalk-debian-wrapper (0.1.0) unstable; urgency=medium
+
+  * Initial release.
+  * Bundled Wine 11.0 (wow64, no i386 packages needed), built on Ubuntu 22.04.
+  * Wine patch: ignore stale mouse move/resize requests so windows no longer
+    stick to the pointer after dragging (KWin and others).
+  * Supports both the classic KakaoTalk and the new Qt 6 based KakaoTalk.
+  * Korean font substitution, DPI and input method (fcitx/ibus) setup.
+  * Desktop entry, icon extracted from the user's install, kakaotalk:// links,
+    optional autostart.
+
+ -- kakaotalk-debian-wrapper contributors  Sun, 27 Sep 2026 22:30:00 +0900

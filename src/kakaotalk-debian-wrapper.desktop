@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Name=KakaoTalk
+Name[ko]=카카오톡
+GenericName=Messenger
+GenericName[ko]=메신저
+Comment=Windows KakaoTalk running on Wine (unofficial)
+Comment[ko]=Wine으로 실행하는 Windows용 카카오톡 (비공식)
+Exec=kakaotalk %u
+Icon=kakaotalk-debian-wrapper
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=kakao;kakaotalk;katalk;카카오;카톡;
+MimeType=x-scheme-handler/kakaotalk;x-scheme-handler/kakaoopen;
+StartupNotify=true
+StartupWMClass=kakaotalk.exe

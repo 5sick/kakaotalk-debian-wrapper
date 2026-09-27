@@ -141,7 +141,7 @@ apply_fontengine() {
 # 시스템 CJK 폰트를 prefix 폰트 폴더에 링크 (Qt freetype 엔진은 파일 경로가 필요)
 link_fonts() {
     fontdir="$WINEPREFIX/drive_c/windows/Fonts"
-    for f in /usr/share/fonts/opentype/noto/NotoSansCJK-*.ttc; do
+    for f in /usr/share/fonts/opentype/noto/NotoSansCJK-*.ttc /usr/share/fonts/opentype/noto/NotoSerifCJK-*.ttc; do
         [ -e "$f" ] || continue
         [ -e "$fontdir/${f##*/}" ] || ln -s "$f" "$fontdir/${f##*/}"
     done
@@ -198,7 +198,7 @@ find_exe() {
 }
 
 # prefix 레지스트리 설정. 내용을 바꾸면 TWEAKS_VERSION을 올려서 기존 prefix에도 다시 적용되게 한다.
-TWEAKS_VERSION=4
+TWEAKS_VERSION=5
 OPEN_HELPER="/usr/lib/$APP/open"
 
 apply_tweaks() {
@@ -241,9 +241,23 @@ Windows Registry Editor Version 5.00
 [HKEY_CURRENT_USER\\Software\\Wine\\Fonts\\Replacements]
 "Malgun Gothic"="Noto Sans CJK KR"
 "맑은 고딕"="Noto Sans CJK KR"
-"Gulim"="Noto Sans CJK KR"
-"Dotum"="Noto Sans CJK KR"
 "Segoe UI"="Noto Sans CJK KR"
+"Gulim"="Noto Sans CJK KR"
+"GulimChe"="Noto Sans CJK KR"
+"굴림"="Noto Sans CJK KR"
+"굴림체"="Noto Sans CJK KR"
+"Dotum"="Noto Sans CJK KR"
+"DotumChe"="Noto Sans CJK KR"
+"돋움"="Noto Sans CJK KR"
+"돋움체"="Noto Sans CJK KR"
+"Batang"="Noto Serif CJK KR"
+"BatangChe"="Noto Serif CJK KR"
+"바탕"="Noto Serif CJK KR"
+"바탕체"="Noto Serif CJK KR"
+"Gungsuh"="Noto Serif CJK KR"
+"GungsuhChe"="Noto Serif CJK KR"
+"궁서"="Noto Serif CJK KR"
+"궁서체"="Noto Serif CJK KR"
 
 [HKEY_CURRENT_USER\\Control Panel\\Desktop]
 "LogPixels"=dword:$(printf '%08x' "$dpi")

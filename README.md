@@ -19,6 +19,9 @@ sudo apt install ./kakaotalk-debian-wrapper_*_amd64.deb
 
 **지원 환경**: amd64, Debian 12 이상 / Ubuntu 22.04 이상 (및 파생 배포판). 32비트(i386) 패키지는 필요 없습니다.
 
+**카카오톡 버전**: 기본으로 받는 공식 64비트 카카오톡(26.8)과 새 Qt 기반 카카오톡(베타) 모두 동작을 확인했습니다.
+베타 설치 파일은 `kakaotalk --install 설치파일.exe`로 설치할 수 있습니다.
+
 ## 사용법
 
 ```sh

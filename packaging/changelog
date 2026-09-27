@@ -6,6 +6,8 @@ kakaotalk-debian-wrapper (0.2.0) unstable; urgency=medium
   * Wine patch: pass the app minimum window size (WM_GETMINMAXINFO) to the
     window manager, so windows can no longer be shrunk to a thin line.
   * Enable camera (V4L2) support in the bundled Wine for video calls.
+  * Korean font names (굴림, 돋움, 바탕, 궁서 and their -체 variants) are now
+    substituted too, fixing broken Hangul in the classic installer EULA.
   * Open received files (images, videos, documents, hwp, ...) with the Linux
     default apps instead of Wine programs.
   * Limit the Linux folders visible to KakaoTalk to Downloads, Documents and

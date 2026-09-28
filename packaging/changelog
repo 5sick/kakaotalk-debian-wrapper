@@ -1,3 +1,17 @@
+kakaotalk-debian-wrapper (0.3.0) unstable; urgency=medium
+
+  * Wine patch: "Open folder" (explorer.exe /select, SHOpenFolderAndSelectItems)
+    opens the Linux file manager and selects the file (FileManager1 D-Bus
+    interface, falling back to xdg-open) instead of Wine's explorer.
+  * Wine patch: file open/save dialogs (IFileDialog, GetOpenFileNameW,
+    GetSaveFileNameW) use the Linux file chooser via xdg-desktop-portal,
+    falling back to Wine's dialog when no portal is available. Files picked
+    outside the shared folders are copied into the prefix temp folder.
+  * Launcher: enable both through the registry (TWEAKS_VERSION 6).
+  * Recommend xdg-desktop-portal and dbus-send.
+
+ -- kakaotalk-debian-wrapper contributors  Mon, 28 Sep 2026 22:00:00 +0900
+
 kakaotalk-debian-wrapper (0.2.0) unstable; urgency=medium
 
   * Wine patch: composite GL content with alpha for windows that request

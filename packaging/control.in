@@ -19,7 +19,7 @@ Depends: libc6 (>= 2.35),
  gstreamer1.0-plugins-base, gstreamer1.0-plugins-good,
  libunwind8, libudev1, libusb-1.0-0, libv4l-0t64 | libv4l-0
 Recommends: gstreamer1.0-libav, icoutils, libnotify-bin, x11-xserver-utils,
- libsdl2-2.0-0, mesa-vulkan-drivers
+ libsdl2-2.0-0, mesa-vulkan-drivers, xdg-desktop-portal, dbus-bin | dbus
 Description: Unofficial wrapper to run Windows KakaoTalk with a bundled Wine
  Runs the Windows version of KakaoTalk in a dedicated Wine prefix with a
  bundled, patched Wine build, Korean font and input method setup, and

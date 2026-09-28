@@ -179,6 +179,9 @@ apply_file_access() {
     templates="$userdir/AppData/Roaming/Microsoft/Windows/Templates"
     [ -L "$templates" ] && rm -f "$templates" && mkdir -p "$templates"
 
+    # 공유 폴더 밖에서 첨부한 파일은 리눅스 파일 선택 창이 여기에 복사해 둔다 (patches/0005)
+    rm -rf "$userdir/AppData/Local/Temp/host-files"
+
     if [ -n "${KAKAOTALK_FULL_ACCESS:-}" ]; then
         ln -sfn / "$WINEPREFIX/dosdevices/z:"
     else
@@ -281,6 +284,11 @@ Windows Registry Editor Version 5.00
 ; "OPEN_HELPER --select 리눅스경로"를 실행해서 리눅스 파일 관리자에서 파일을 선택해 보여준다.
 [HKEY_CURRENT_USER\\Software\\Wine\\Explorer]
 "HostFileManager"="$OPEN_HELPER"
+
+; 파일 첨부/저장 창을 Wine 창 대신 리눅스 파일 선택 창(xdg-desktop-portal)으로 띄운다 (patches/0005).
+; 포털이 없으면 Wine 창이 그대로 뜬다.
+[HKEY_CURRENT_USER\\Software\\Wine\\FileDialog]
+"HostFileChooser"="Y"
 
 ; 크래시 시 winedbg가 멈춰 있지 않고 덤프만 남기고 끝나게 한다
 [HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug]

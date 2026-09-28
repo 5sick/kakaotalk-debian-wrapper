@@ -1,25 +1,90 @@
 #!/bin/sh
 # winebrowser가 넘긴 주소를 리눅스 기본 앱(파일 관리자 등)으로 연다.
 # file:// 경로는 prefix 안의 연결 경로(drive_c/users/.../Documents) 대신 실제 경로로 풀어서 넘긴다.
+#
+#   open URL                  winebrowser용: 리눅스 기본 앱으로 연다
+#   open --select 경로...     파일 관리자에서 파일을 선택해서 보여준다 (폴더 열기)
+#   open --folder 경로        파일 관리자로 폴더를 연다
+# --select/--folder는 패치된 Wine의 explorer.exe/shell32가 부른다
+# (HKCU\Software\Wine\Explorer "HostFileManager").
 # SPDX-License-Identifier: MIT
 set -eu
 
-url="${1:-}"
-case "$url" in
+# %XX 디코딩 (UTF-8 바이트를 그대로 내보내도록 C 로케일)
+url_decode() {
+    printf '%s' "$1" | LC_ALL=C awk '
+        BEGIN { for (i = 0; i < 256; i++) hex[sprintf("%02X", i)] = i }
+        {
+            out = ""
+            while (match($0, /%[0-9A-Fa-f][0-9A-Fa-f]/)) {
+                out = out substr($0, 1, RSTART - 1) sprintf("%c", hex[toupper(substr($0, RSTART + 1, 2))])
+                $0 = substr($0, RSTART + 3)
+            }
+            printf "%s", out $0
+        }'
+}
+
+# 경로 → file:// URI. 쉼표도 인코딩한다 (dbus-send의 array:string 구분자).
+file_uri() {
+    printf '%s' "$1" | LC_ALL=C awk '
+        BEGIN { for (i = 1; i < 256; i++) ord[sprintf("%c", i)] = i }
+        {
+            if (NR > 1) printf "%%0A"
+            for (i = 1; i <= length($0); i++) {
+                c = substr($0, i, 1)
+                if (c ~ /[A-Za-z0-9\/._~-]/) printf "%s", c
+                else printf "%%%02X", ord[c]
+            }
+        }
+        BEGIN { printf "file://" }'
+}
+
+real_path() {
+    realpath -e -- "$1" 2>/dev/null || printf '%s' "$1"
+}
+
+# org.freedesktop.FileManager1 (Dolphin, Nautilus, Nemo, Thunar 등)
+file_manager1() {
+    method="$1"; shift
+    if command -v dbus-send >/dev/null; then
+        uris=
+        for uri in "$@"; do uris="${uris:+$uris,}$uri"; done
+        dbus-send --session --print-reply --reply-timeout=5000 \
+            --dest=org.freedesktop.FileManager1 --type=method_call \
+            /org/freedesktop/FileManager1 "org.freedesktop.FileManager1.$method" \
+            "array:string:$uris" string:"" >/dev/null 2>&1 && return 0
+    fi
+    if command -v gdbus >/dev/null; then
+        list=
+        for uri in "$@"; do list="${list:+$list, }'$uri'"; done
+        gdbus call --session --timeout 5 \
+            --dest org.freedesktop.FileManager1 --object-path /org/freedesktop/FileManager1 \
+            --method "org.freedesktop.FileManager1.$method" "[$list]" "" >/dev/null 2>&1 && return 0
+    fi
+    return 1
+}
+
+case "${1:-}" in
+    --select|--folder)
+        mode="$1"; shift
+        [ $# -gt 0 ] || exit 1
+        first=$(real_path "$1")
+        n=0
+        for p in "$@"; do
+            r=$(real_path "$p")
+            set -- "$@" "$(file_uri "$r")"
+            n=$((n + 1))
+        done
+        shift "$n"
+        if [ "$mode" = --select ]; then
+            file_manager1 ShowItems "$@" && exit 0
+            [ -d "$first" ] || first=$(dirname -- "$first")
+        else
+            file_manager1 ShowFolders "$@" && exit 0
+        fi
+        exec xdg-open "$first" ;;
     file://*)
-        # %XX 디코딩 (UTF-8 바이트를 그대로 내보내도록 C 로케일)
-        path=$(printf '%s' "${url#file://}" | LC_ALL=C awk '
-            BEGIN { for (i = 0; i < 256; i++) hex[sprintf("%02X", i)] = i }
-            {
-                out = ""
-                while (match($0, /%[0-9A-Fa-f][0-9A-Fa-f]/)) {
-                    out = out substr($0, 1, RSTART - 1) sprintf("%c", hex[toupper(substr($0, RSTART + 1, 2))])
-                    $0 = substr($0, RSTART + 3)
-                }
-                printf "%s", out $0
-            }')
-        real=$(realpath -e -- "$path" 2>/dev/null || printf '%s' "$path")
-        exec xdg-open "$real" ;;
+        exec xdg-open "$(real_path "$(url_decode "${1#file://}")")" ;;
     *)
-        exec xdg-open "$url" ;;
+        exec xdg-open "${1:-}" ;;
 esac

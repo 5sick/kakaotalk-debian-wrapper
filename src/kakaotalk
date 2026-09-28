@@ -198,7 +198,7 @@ find_exe() {
 }
 
 # prefix 레지스트리 설정. 내용을 바꾸면 TWEAKS_VERSION을 올려서 기존 prefix에도 다시 적용되게 한다.
-TWEAKS_VERSION=5
+TWEAKS_VERSION=6
 OPEN_HELPER="/usr/lib/$APP/open"
 
 apply_tweaks() {
@@ -275,6 +275,12 @@ Windows Registry Editor Version 5.00
 
 [HKEY_CLASSES_ROOT\\Directory\\shell\\open\\command]
 @="\\"C:\\\\windows\\\\system32\\\\winebrowser.exe\\" \\"%1\\""
+
+; "폴더 열기"(explorer.exe /select,파일 또는 SHOpenFolderAndSelectItems)는 연결을 거치지 않고
+; Wine 탐색기를 직접 띄운다. 패치된 Wine(patches/0004)은 이 값이 있으면 대신
+; "OPEN_HELPER --select 리눅스경로"를 실행해서 리눅스 파일 관리자에서 파일을 선택해 보여준다.
+[HKEY_CURRENT_USER\\Software\\Wine\\Explorer]
+"HostFileManager"="$OPEN_HELPER"
 
 ; 크래시 시 winedbg가 멈춰 있지 않고 덤프만 남기고 끝나게 한다
 [HKEY_LOCAL_MACHINE\\Software\\Microsoft\\Windows NT\\CurrentVersion\\AeDebug]

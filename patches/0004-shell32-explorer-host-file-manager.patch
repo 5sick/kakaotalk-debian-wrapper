@@ -1,0 +1,146 @@
+From: 5sick <213179368+5sick@users.noreply.github.com>
+Subject: [PATCH] shell32, explorer: Optionally show folders in a host file manager.
+
+If HKCU\Software\Wine\Explorer "HostFileManager" names a Unix command,
+SHOpenFolderAndSelectItems() runs "<command> --select <unix path>...",
+"explorer.exe /select,<path>" runs "<command> --select <unix path>" and
+"explorer.exe <folder>" runs "<command> --folder <unix path>" instead of
+opening a Wine explorer window. "explorer.exe /desktop" is unchanged.
+If the value is missing or the command cannot be started, Wine's
+explorer is used as before.
+---
+diff --git a/dlls/shell32/shlfolder.c b/dlls/shell32/shlfolder.c
+index ea44f86..638efa5 100644
+--- a/dlls/shell32/shlfolder.c
++++ b/dlls/shell32/shlfolder.c
+@@ -31,6 +31,7 @@
+ #include "windef.h"
+ #include "winbase.h"
+ #include "winreg.h"
++#include "winternl.h"
+ #include "wingdi.h"
+ #include "winuser.h"
+ 
+@@ -622,6 +623,48 @@ HRESULT WINAPI SHCreateLinks( HWND hWnd, LPCSTR lpszDir, LPDATAOBJECT lpDataObje
+     return E_NOTIMPL;
+ }
+ 
++/* Show the items in a host (Unix) file manager if HKCU\Software\Wine\Explorer
++ * "HostFileManager" names a Unix command. It is run as "<command> --select <unix path>...". */
++static BOOL open_in_host_file_manager(PCIDLIST_ABSOLUTE pidl_folder, UINT cidl, PCUITEMID_CHILD_ARRAY apidl)
++{
++    WCHAR command[MAX_PATH], path[MAX_PATH];
++    DWORD size = sizeof(command);
++    UINT i, argc = 2;
++    char **argv;
++    BOOL ret = FALSE;
++
++    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Wine\\Explorer", L"HostFileManager",
++                     RRF_RT_REG_SZ, NULL, command, &size) || !command[0])
++        return FALSE;
++
++    if (!(argv = calloc(cidl + 4, sizeof(*argv)))) return FALSE;
++    size = WideCharToMultiByte(CP_UNIXCP, 0, command, -1, NULL, 0, NULL, NULL);
++    if ((argv[0] = HeapAlloc(GetProcessHeap(), 0, size)))
++        WideCharToMultiByte(CP_UNIXCP, 0, command, -1, argv[0], size, NULL, NULL);
++    argv[1] = (char *)"--select";
++
++    if (!cidl && SHGetPathFromIDListW(pidl_folder, path))
++        argv[argc++] = wine_get_unix_file_name(path);
++    for (i = 0; i < cidl; i++)
++    {
++        ITEMIDLIST *pidl = ILCombine(pidl_folder, apidl[i]);
++        if (pidl && SHGetPathFromIDListW(pidl, path) && (argv[argc] = wine_get_unix_file_name(path)))
++            argc++;
++        ILFree(pidl);
++    }
++
++    if (argv[0] && argc > 2)
++    {
++        TRACE("running %s for %u items\n", debugstr_a(argv[0]), argc - 2);
++        ret = !__wine_unix_spawnvp(argv, FALSE);
++    }
++
++    HeapFree(GetProcessHeap(), 0, argv[0]);
++    for (i = 2; i < argc; i++) HeapFree(GetProcessHeap(), 0, argv[i]);
++    free(argv);
++    return ret;
++}
++
+ /***********************************************************************
+  *  SHOpenFolderAndSelectItems
+  *
+@@ -656,6 +699,9 @@ HRESULT WINAPI SHOpenFolderAndSelectItems(PCIDLIST_ABSOLUTE pidlFolder, UINT cid
+     if (flags & OFASI_EDIT && cidl > 1)
+         flags &= ~OFASI_EDIT;
+ 
++    if (open_in_host_file_manager(pidlFolder, cidl, apidl))
++        return S_OK;
++
+     hr = CoCreateInstance(&CLSID_ShellWindows, NULL, CLSCTX_LOCAL_SERVER, &IID_IShellWindows,
+                           (void **)&sw);
+     if (FAILED(hr))
+diff --git a/programs/explorer/explorer.c b/programs/explorer/explorer.c
+index 1854144..55153ea 100644
+--- a/programs/explorer/explorer.c
++++ b/programs/explorer/explorer.c
+@@ -28,6 +28,7 @@
+ 
+ #include <initguid.h>
+ #include <windows.h>
++#include <winternl.h>
+ #include <shellapi.h>
+ #include <shobjidl.h>
+ #include <shlobj.h>
+@@ -911,6 +912,34 @@ static void parse_command_line(LPWSTR commandline,parameters_struct *parameters)
+     }
+ }
+ 
++/* Open a folder in a host (Unix) file manager if HKCU\Software\Wine\Explorer
++ * "HostFileManager" names a Unix command. It is run as "<command> <option> <unix path>". */
++static BOOL open_in_host_file_manager(const char *option, const WCHAR *path)
++{
++    WCHAR command[MAX_PATH];
++    DWORD size = sizeof(command);
++    char *argv[4] = { NULL, (char *)option, NULL, NULL };
++    BOOL ret = FALSE;
++
++    if (RegGetValueW(HKEY_CURRENT_USER, L"Software\\Wine\\Explorer", L"HostFileManager",
++                     RRF_RT_REG_SZ, NULL, command, &size) || !command[0])
++        return FALSE;
++
++    size = WideCharToMultiByte(CP_UNIXCP, 0, command, -1, NULL, 0, NULL, NULL);
++    if ((argv[0] = HeapAlloc(GetProcessHeap(), 0, size)))
++        WideCharToMultiByte(CP_UNIXCP, 0, command, -1, argv[0], size, NULL, NULL);
++    argv[2] = wine_get_unix_file_name(path);
++
++    if (argv[0] && argv[2])
++    {
++        TRACE("running %s %s %s\n", debugstr_a(argv[0]), option, debugstr_a(argv[2]));
++        ret = !__wine_unix_spawnvp(argv, FALSE);
++    }
++    HeapFree(GetProcessHeap(), 0, argv[0]);
++    HeapFree(GetProcessHeap(), 0, argv[2]);
++    return ret;
++}
++
+ int WINAPI wWinMain(HINSTANCE hinstance,
+                     HINSTANCE previnstance,
+                     LPWSTR cmdline,
+@@ -924,6 +953,16 @@ int WINAPI wWinMain(HINSTANCE hinstance,
+     memset(&parameters,0,sizeof(parameters));
+     explorer_hInstance = hinstance;
+     parse_command_line(cmdline,&parameters);
++    if (parameters.selection[0])
++    {
++        if (open_in_host_file_manager("--select", parameters.selection))
++            ExitProcess(EXIT_SUCCESS);
++    }
++    else if (parameters.root[0] && PathIsDirectoryW(parameters.root))
++    {
++        if (open_in_host_file_manager("--folder", parameters.root))
++            ExitProcess(EXIT_SUCCESS);
++    }
+     hres = OleInitialize(NULL);
+     if(FAILED(hres))
+     {

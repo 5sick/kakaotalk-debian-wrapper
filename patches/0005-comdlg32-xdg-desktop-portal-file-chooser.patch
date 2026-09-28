@@ -11,9 +11,11 @@ folder picking are passed on; the parent is given as "x11:<XID>".
 
 Picked Unix paths below the target of a known folder that is a symlink in
 the prefix (Downloads, Documents, ...) are returned through that folder.
-Files the prefix can't reach otherwise are copied to %TEMP%\host-files\
-for opening. If no portal is available, or a save location or folder
-can't be mapped to a DOS path, Wine's own dialog is shown instead.
+Other folders the prefix can't reach (e.g. without a Z: drive) are linked
+into C:\Linux\ (a symlink per picked folder, reused and kept so remembered
+paths stay valid) and returned through that link, for opening, saving and
+folder picking alike. Only if linking fails, files to open are copied to
+%TEMP%\host-files\. If no portal is available, Wine's own dialog is shown.
 ---
 diff --git a/dlls/comdlg32/Makefile.in b/dlls/comdlg32/Makefile.in
 index c298c08..de7862e 100644
@@ -97,10 +99,10 @@ index 9d57375..7ab7be7 100644
          return GetFileDialog95(&info, SAVE_DIALOG);
 diff --git a/dlls/comdlg32/hostdlg.c b/dlls/comdlg32/hostdlg.c
 new file mode 100644
-index 0000000..09c13f0
+index 0000000..11e529c
 --- /dev/null
 +++ b/dlls/comdlg32/hostdlg.c
-@@ -0,0 +1,387 @@
+@@ -0,0 +1,443 @@
 +/*
 + * Host file chooser (xdg-desktop-portal) for the common file dialogs
 + *
@@ -304,6 +306,59 @@ index 0000000..09c13f0
 +    return dest;
 +}
 +
++/* A picked Unix path the prefix can't reach (outside the shared folders, no Z:
++ * drive) is made reachable by linking its folder (or the picked folder itself)
++ * into C:\Linux\. The user picked it, so exposing just that folder is fine, and
++ * the link is kept so that remembered paths (e.g. a download folder) stay valid. */
++static WCHAR *link_host_folder(const char *path, BOOL is_dir)
++{
++    struct link_folder_params *params;
++    const char *slash = strrchr(path, '/');
++    char *root, *dir = NULL, *link_path = NULL;
++    WCHAR *ret = NULL;
++    size_t len;
++
++    if (!CreateDirectoryW(L"C:\\Linux", NULL) && GetLastError() != ERROR_ALREADY_EXISTS) return NULL;
++    if (!(root = wine_get_unix_file_name(L"C:\\Linux"))) return NULL;
++    if (!(params = calloc(1, sizeof(*params)))) goto done;
++    params->size = sizeof(params->data);
++
++    if (is_dir) dir = strdup(path);
++    else if (slash && slash != path)
++    {
++        if ((dir = malloc(slash - path + 1)))
++        {
++            memcpy(dir, path, slash - path);
++            dir[slash - path] = 0;
++        }
++    }
++    else dir = strdup("/");
++    if (!dir || strlen(root) + strlen(dir) + 2 > sizeof(params->data)) goto done;
++    strcpy(params->data, root);
++    strcpy(params->data + strlen(root) + 1, dir);
++
++    if (WINE_UNIX_CALL(unix_link_folder, params)) goto done;
++    len = strlen(params->data) + (is_dir ? 0 : strlen(slash)) + 1;
++    if (!(link_path = malloc(len))) goto done;
++    strcpy(link_path, params->data);
++    if (!is_dir) strcat(link_path, slash);
++
++    ret = wine_get_dos_file_name(link_path);
++    TRACE("%s -> %s\n", debugstr_a(path), debugstr_w(ret));
++    if (ret && !wcsncmp(ret, L"\\\\?\\unix\\", 9))
++    {
++        HeapFree(GetProcessHeap(), 0, ret);
++        ret = NULL;
++    }
++
++done:
++    free(link_path);
++    free(dir);
++    free(params);
++    HeapFree(GetProcessHeap(), 0, root);
++    return ret;
++}
++
 +/* Show the host file chooser. On success *files receives the picked DOS paths as
 + * a double null terminated list (free with free()). Returns S_OK,
 + * HRESULT_FROM_WIN32(ERROR_CANCELLED), or a failure if Wine's dialog should be
@@ -347,11 +402,14 @@ index 0000000..09c13f0
 +        TRACE("%s -> %s\n", debugstr_a(path), debugstr_w(dos_name));
 +        if (!wcsncmp(dos_name, L"\\\\?\\unix\\", 9))
 +        {
-+            /* a new file can't be saved there, and a folder isn't worth copying */
-+            if (dlg->save || dlg->directory || !(tmp = copy_to_temp(dos_name, temp_dir)))
++            if (!(tmp = link_host_folder(path, dlg->directory)))
 +            {
-+                HeapFree(GetProcessHeap(), 0, dos_name);
-+                goto done;
++                /* last resort for reading; a new file can't be saved to a copy */
++                if (dlg->save || dlg->directory || !(tmp = copy_to_temp(dos_name, temp_dir)))
++                {
++                    HeapFree(GetProcessHeap(), 0, dos_name);
++                    goto done;
++                }
 +            }
 +            HeapFree(GetProcessHeap(), 0, dos_name);
 +            dos_name = tmp;
@@ -612,10 +670,10 @@ index 830d88b..b95d903 100644
  
 diff --git a/dlls/comdlg32/portal.c b/dlls/comdlg32/portal.c
 new file mode 100644
-index 0000000..4a50871
+index 0000000..eaafd57
 --- /dev/null
 +++ b/dlls/comdlg32/portal.c
-@@ -0,0 +1,554 @@
+@@ -0,0 +1,621 @@
 +/*
 + * Host file chooser through the xdg-desktop-portal FileChooser interface
 + *
@@ -646,7 +704,10 @@ index 0000000..4a50871
 +#include <string.h>
 +#include <ctype.h>
 +#include <dlfcn.h>
++#include <errno.h>
 +#include <pthread.h>
++#include <unistd.h>
++#include <sys/stat.h>
 +#ifdef SONAME_LIBDBUS_1
 +# include <dbus/dbus.h>
 +#endif
@@ -1152,19 +1213,83 @@ index 0000000..4a50871
 +
 +#endif  /* SONAME_LIBDBUS_1 */
 +
++static NTSTATUS link_folder( void *args )
++{
++    struct link_folder_params *params = args;
++    char *root = NULL, *target = NULL, *link = NULL, current[4096];
++    const char *end = params->data + sizeof(params->data), *base;
++    NTSTATUS status = STATUS_UNSUCCESSFUL;
++    struct stat st;
++    size_t size;
++    ssize_t len;
++    int i;
++
++    if (!(base = memchr( params->data, 0, sizeof(params->data) )) || ++base >= end || !memchr( base, 0, end - base ))
++        return STATUS_INVALID_PARAMETER;
++    if (!(root = strdup( params->data )) || !(target = strdup( base ))) goto done;
++
++    len = strlen( target );
++    while (len > 1 && target[len - 1] == '/') target[--len] = 0;
++    if (stat( target, &st ) || !S_ISDIR( st.st_mode ))
++    {
++        status = STATUS_NOT_A_DIRECTORY;
++        goto done;
++    }
++
++    base = strrchr( target, '/' );
++    base = base && base[1] ? base + 1 : "root";
++    size = strlen( root ) + strlen( base ) + 16;
++    if (!(link = malloc( size ))) goto done;
++
++    for (i = 1; i <= 100; i++)
++    {
++        if (i == 1) snprintf( link, size, "%s/%s", root, base );
++        else snprintf( link, size, "%s/%s (%d)", root, base, i );
++
++        if ((len = readlink( link, current, sizeof(current) - 1 )) >= 0)
++        {
++            current[len] = 0;
++            if (strcmp( current, target )) continue;  /* taken by another folder */
++        }
++        else if (errno != ENOENT || symlink( target, link ))
++        {
++            if (errno == EEXIST) continue;  /* not a symlink, or created meanwhile */
++            WARN( "failed to link %s: %s\n", debugstr_a(link), strerror( errno ) );
++            goto done;
++        }
++        TRACE( "%s -> %s\n", debugstr_a(link), debugstr_a(target) );
++        if (strlen( link ) >= params->size || strlen( link ) >= sizeof(params->data))
++            status = STATUS_BUFFER_TOO_SMALL;
++        else
++        {
++            strcpy( params->data, link );
++            status = STATUS_SUCCESS;
++        }
++        break;
++    }
++
++done:
++    free( link );
++    free( target );
++    free( root );
++    return status;
++}
++
 +const unixlib_entry_t __wine_unix_call_funcs[] =
 +{
 +    file_chooser,
++    link_folder,
 +};
 +
 +C_ASSERT( ARRAYSIZE(__wine_unix_call_funcs) == unix_funcs_count );
 +
 +#ifdef _WIN64
 +
-+/* struct file_chooser_params has the same layout for 32-bit callers */
++/* the parameter structures have the same layout for 32-bit callers */
 +const unixlib_entry_t __wine_unix_call_wow64_funcs[] =
 +{
 +    file_chooser,
++    link_folder,
 +};
 +
 +C_ASSERT( ARRAYSIZE(__wine_unix_call_wow64_funcs) == unix_funcs_count );
@@ -1172,10 +1297,10 @@ index 0000000..4a50871
 +#endif  /* _WIN64 */
 diff --git a/dlls/comdlg32/unixlib.h b/dlls/comdlg32/unixlib.h
 new file mode 100644
-index 0000000..d963c54
+index 0000000..466641e
 --- /dev/null
 +++ b/dlls/comdlg32/unixlib.h
-@@ -0,0 +1,58 @@
+@@ -0,0 +1,70 @@
 +/*
 + * Unix interface for comdlg32 (host file chooser)
 + *
@@ -1227,9 +1352,21 @@ index 0000000..d963c54
 +    char   data[8];
 +};
 +
++/* Link a host directory the user picked into a directory of the prefix, so that a
++ * prefix without a drive for it can still reach it. data holds the Unix path of
++ * the directory to put links in and the Unix path of the target, both null
++ * terminated. On success data is overwritten with the full Unix path of the link.
++ * An existing link to the same target is reused. */
++struct link_folder_params
++{
++    UINT32 size;            /* size of data */
++    char   data[4096];
++};
++
 +enum comdlg32_funcs
 +{
 +    unix_file_chooser,
++    unix_link_folder,
 +    unix_funcs_count
 +};
 +

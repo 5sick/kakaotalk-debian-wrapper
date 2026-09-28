@@ -5,8 +5,10 @@ kakaotalk-debian-wrapper (0.3.0) unstable; urgency=medium
     interface, falling back to xdg-open) instead of Wine's explorer.
   * Wine patch: file open/save dialogs (IFileDialog, GetOpenFileNameW,
     GetSaveFileNameW) use the Linux file chooser via xdg-desktop-portal,
-    falling back to Wine's dialog when no portal is available. Files picked
-    outside the shared folders are copied into the prefix temp folder.
+    falling back to Wine's dialog when no portal is available. Folders picked
+    outside the shared folders are linked into C:\Linux\, so saving there works
+    without showing Wine's dialog again.
+  * Wine patch: SHBrowseForFolderW uses the Linux file chooser too.
   * Launcher: enable both through the registry (TWEAKS_VERSION 6).
   * Recommend xdg-desktop-portal and dbus-send.
 

@@ -489,10 +489,10 @@ index 0000000..09c13f0
 +    return TRUE;
 +}
 diff --git a/dlls/comdlg32/itemdlg.c b/dlls/comdlg32/itemdlg.c
-index 830d88b..7dc5476 100644
+index 830d88b..b95d903 100644
 --- a/dlls/comdlg32/itemdlg.c
 +++ b/dlls/comdlg32/itemdlg.c
-@@ -2519,13 +2519,112 @@ static ULONG WINAPI IFileDialog2_fnRelease(IFileDialog2 *iface)
+@@ -2519,13 +2519,117 @@ static ULONG WINAPI IFileDialog2_fnRelease(IFileDialog2 *iface)
      return ref;
  }
  
@@ -512,7 +512,12 @@ index 830d88b..7dc5476 100644
 +        return S_FALSE;
 +
 +    for (i = 0; i < This->filterspec_count; i++)
++    {
++        if (!This->filterspecs[i].pszName || !This->filterspecs[i].pszName[0] ||
++            !This->filterspecs[i].pszSpec || !This->filterspecs[i].pszSpec[0])
++            return S_FALSE;
 +        len += wcslen(This->filterspecs[i].pszName) + wcslen(This->filterspecs[i].pszSpec) + 2;
++    }
 +    if (len && (filters = p = malloc((len + 1) * sizeof(WCHAR))))
 +    {
 +        for (i = 0; i < This->filterspec_count; i++)
@@ -607,10 +612,10 @@ index 830d88b..7dc5476 100644
  
 diff --git a/dlls/comdlg32/portal.c b/dlls/comdlg32/portal.c
 new file mode 100644
-index 0000000..9634709
+index 0000000..4a50871
 --- /dev/null
 +++ b/dlls/comdlg32/portal.c
-@@ -0,0 +1,546 @@
+@@ -0,0 +1,554 @@
 +/*
 + * Host file chooser through the xdg-desktop-portal FileChooser interface
 + *
@@ -744,7 +749,7 @@ index 0000000..9634709
 +{
 +    DBusMessageIter filter, patterns;
 +    char *copy = strdup( spec ), *glob, *next, *p;
-+    BOOL upper;
++    BOOL lower, upper;
 +
 +    p_dbus_message_iter_open_container( iter, DBUS_TYPE_STRUCT, NULL, &filter );
 +    p_dbus_message_iter_append_basic( &filter, DBUS_TYPE_STRING, &name );
@@ -757,14 +762,22 @@ index 0000000..9634709
 +        if (!*glob) continue;
 +        if (!strcmp( glob, "*.*" )) glob[1] = 0;
 +        append_glob( &patterns, glob );
-+        /* Windows patterns are case insensitive */
-+        for (p = glob, upper = FALSE; *p; p++)
++        /* Windows patterns are case insensitive, add upper and lower case variants */
++        for (p = glob, lower = upper = FALSE; *p; p++)
 +        {
-+            if (!islower( (unsigned char)*p )) continue;
-+            *p = toupper( (unsigned char)*p );
-+            upper = TRUE;
++            if (islower( (unsigned char)*p )) lower = TRUE;
++            if (isupper( (unsigned char)*p )) upper = TRUE;
 +        }
-+        if (upper) append_glob( &patterns, glob );
++        if (lower)
++        {
++            for (p = glob; *p; p++) *p = toupper( (unsigned char)*p );
++            append_glob( &patterns, glob );
++        }
++        if (upper)
++        {
++            for (p = glob; *p; p++) *p = tolower( (unsigned char)*p );
++            append_glob( &patterns, glob );
++        }
 +    }
 +    p_dbus_message_iter_close_container( &filter, &patterns );
 +    p_dbus_message_iter_close_container( iter, &filter );

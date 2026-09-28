@@ -1,5 +1,11 @@
 # kakaotalk-debian-wrapper
 
+> **English summary** — An unofficial `.deb` that runs the Windows version of KakaoTalk on Debian/Ubuntu (amd64)
+> with a bundled, patched Wine 11. It sets up Korean fonts, DPI and the input method, adds desktop integration,
+> and uses the Linux file chooser and file manager. KakaoTalk itself is downloaded from Kakao's official server on
+> first run. The Wine patches are general fixes and opt-in host integration, documented in [patches/](patches/);
+> plans are in [docs/ROADMAP.md](docs/ROADMAP.md). Not affiliated with Kakao Corp.
+
 Debian/Ubuntu에서 Windows용 카카오톡을 **설치 한 번으로 자연스럽게** 쓰기 위한 비공식 래퍼입니다.
 패치한 Wine을 함께 넣은 `.deb` 하나로 설치, 한글 폰트와 입력기 설정, 메뉴와 아이콘, `kakaotalk://` 링크까지 처리합니다.
 
@@ -46,7 +52,9 @@ kakaotalk --help
 | `KAKAOTALK_DEBUG=1` | `~/.cache/kakaotalk-debian-wrapper/`에 Wine 로그 저장 |
 
 데이터 위치: `~/.local/share/kakaotalk-debian-wrapper/prefix` (Wine prefix).
-패키지를 삭제해도 이 폴더는 남으니, 완전히 지우려면 패키지를 지우기 전에 `kakaotalk --reset`을 실행하세요.
+패키지를 삭제해도(`apt remove`든 `apt purge`든) 홈 폴더의 데이터는 남습니다. 완전히 지우려면 패키지를 지우기 전에
+`kakaotalk --reset`을 실행하세요. 설정(`~/.config/kakaotalk-debian-wrapper/`), 캐시(`~/.cache/kakaotalk-debian-wrapper/`),
+메뉴 항목(`~/.local/share/applications/kakaotalk-debian-wrapper.desktop`)도 필요하면 직접 지우면 됩니다.
 
 ### 파일 접근 범위
 
@@ -72,6 +80,9 @@ Wine은 기본적으로 `Z:` 드라이브로 리눅스 파일 시스템 전체�
 연결은 유지되므로(설정해 둔 다운로드 폴더 등이 계속 동작하도록) 필요 없어지면
 `~/.local/share/kakaotalk-debian-wrapper/prefix/drive_c/Linux/` 안의 링크를 지우면 됩니다.
 
+파일 관리자에서 **끌어다 놓거나 복사해서 붙여넣은 파일**도 그대로 보낼 수 있습니다.
+공유 폴더 밖의 파일이면 폴더 전체가 아니라 **그 파일만** 임시로 연결하고, 이 연결은 카카오톡을 다음에 실행할 때 지워집니다.
+
 ### 한글 입력
 
 Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 실행 중인 fcitx/ibus/kime/nimf를 감지해
@@ -96,7 +107,7 @@ Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 실행 �
 ## 기존 Wine/Bottles와 무엇이 다른가
 
 - **Wine 동봉**: 배포판의 Wine 버전에 상관없이 검증한 Wine 11(wow64)을 씁니다. 시스템 Wine과 충돌하지 않습니다.
-- **카카오톡용 패치**: 창을 드래그한 뒤 마우스를 따라다니는 문제, 알림 팝업과 툴팁 둘레가 검게 나오는 문제, 창이 실처럼 줄어드는 문제를 Wine 쪽에서 고쳤고, 파일 선택 창과 "폴더 열기"가 리눅스 쪽 창으로 뜨게 했습니다 ([patches/](patches/)).
+- **카카오톡용 패치**: 창을 드래그한 뒤 마우스를 따라다니는 문제, 알림 팝업과 툴팁 둘레가 검게 나오는 문제, 창이 실처럼 줄어드는 문제를 Wine 쪽에서 고쳤고, 파일 선택 창과 "폴더 열기"가 리눅스 쪽 창으로 뜨게 했고, `Z:` 없이도 끌어다 놓기와 붙여넣기가 되게 했습니다 ([patches/](patches/)).
 - **한국어 환경 자동 설정**: 맑은 고딕 → Noto Sans CJK KR 대체, 화면 배율(DPI), fcitx/ibus 입력기.
 - **데스크톱 통합**: 앱 메뉴, 설치된 카카오톡에서 추출한 아이콘, `kakaotalk://` 링크, 자동 실행.
 
@@ -104,6 +115,8 @@ Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 실행 �
 
 - 음성 통화와 페이스톡(카메라)은 동작하지만, 페이스톡 영상이 간헐적으로 깜빡입니다 (조사 중).
 - 창의 투명도는 컴포지터(KWin, Mutter 등)가 켜져 있어야 적용됩니다.
+
+앞으로 할 일은 [docs/ROADMAP.md](docs/ROADMAP.md)에 정리해 두었습니다.
 
 ## 직접 빌드하기
 

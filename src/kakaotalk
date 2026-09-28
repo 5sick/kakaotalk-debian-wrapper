@@ -147,6 +147,12 @@ link_fonts() {
     done
 }
 
+# 이 prefix의 wineserver가 떠 있는지 (Wine은 /tmp/.wine-<uid>/server-<dev>-<inode>/socket을 쓴다)
+prefix_running() {
+    set -- $(stat -Lc '%d %i' "$WINEPREFIX" 2>/dev/null) || return 1
+    [ $# -eq 2 ] && [ -S "/tmp/.wine-$(id -u)/server-$(printf '%x-%x' "$1" "$2")/socket" ]
+}
+
 # 카카오톡(Windows 쪽)에서 보이는 리눅스 폴더를 제한한다. 보안 샌드박스는 아니고,
 # Wine 기본값(Z: = /, Templates = 홈 전체)처럼 불필요하게 넓게 열어두지 않는 정도다.
 # Wine이 prefix를 업데이트할 때 연결을 다시 만들기 때문에 실행할 때마다 적용한다.
@@ -179,8 +185,11 @@ apply_file_access() {
     templates="$userdir/AppData/Roaming/Microsoft/Windows/Templates"
     [ -L "$templates" ] && rm -f "$templates" && mkdir -p "$templates"
 
-    # 공유 폴더 밖에서 첨부한 파일은 리눅스 파일 선택 창이 여기에 복사해 둔다 (patches/0005)
-    rm -rf "$userdir/AppData/Local/Temp/host-files"
+    # 공유 폴더 밖의 파일: 파일 선택 창은 여기에 복사해 두고(patches/0005), 끌어다 놓거나
+    # 붙여넣은 파일은 여기에 링크한다(patches/0007). 카카오톡이 실행 중이 아닐 때만 지운다.
+    if ! prefix_running; then
+        rm -rf "$userdir/AppData/Local/Temp/host-files" "$WINEPREFIX/drive_c/windows/temp/host-files"
+    fi
 
     if [ -n "${KAKAOTALK_FULL_ACCESS:-}" ]; then
         ln -sfn / "$WINEPREFIX/dosdevices/z:"

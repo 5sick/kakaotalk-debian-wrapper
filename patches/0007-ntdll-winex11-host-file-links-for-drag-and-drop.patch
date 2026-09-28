@@ -6,10 +6,12 @@ paths, which applications can't open (even files in the shared folders,
 because those are reached through symlinks inside the prefix, which
 find_drive_nt_root doesn't follow backwards).
 
-unix_to_nt_file_name: when no drive maps a Unix path, look for a symlink in
-drive_c/users/<user>/ (the shell folder links) or drive_c/Linux/ (folders
-picked with the host file chooser) whose target contains the path, and return
-the path through that link. Nothing changes when a drive maps the path.
+unix_to_nt_file_name() and \??\unix\ names in get_nt_and_unix_names(): when
+no drive maps a Unix path, look for a symlink in drive_c/users/<user>/ (the
+shell folder links) or drive_c/Linux/ (folders picked with the host file
+chooser) whose target contains the path, and use the path through that link.
+Nothing changes when a drive maps the path. wine_get_dos_file_name() retries
+with a larger buffer, as the DOS name can now be longer than the Unix name.
 
 New ntdll_get_host_dos_file_name(): like ntdll_get_dos_file_name(), but for
 files the user hands to an application. If the file is still unreachable,
@@ -17,8 +19,29 @@ only that file or folder is linked into
 C:\windows\temp\host-files\<unique>\ (an existing link is reused). winex11
 uses it for text/uri-list and file list drops and for pasted file lists.
 ---
+diff --git a/dlls/kernel32/path.c b/dlls/kernel32/path.c
+index 1f0d4c3..6c8ef46 100644
+--- a/dlls/kernel32/path.c
++++ b/dlls/kernel32/path.c
+@@ -511,6 +511,16 @@ WCHAR * CDECL wine_get_dos_file_name( LPCSTR str )
+         if (!set_ntstatus( status )) goto failed;
+         if (!(buffer = RtlAllocateHeap( GetProcessHeap(), 0, (len + 8) * sizeof(WCHAR) ))) goto failed;
+         res = GetFinalPathNameByHandleW( handle, buffer, len + 8, VOLUME_NAME_DOS );
++        if (res > len + 8)
++        {
++            /* the DOS name can be longer than the Unix one (e.g. reached through a prefix link) */
++            WCHAR *new_buffer;
++
++            len = res + len;
++            if (!(new_buffer = RtlReAllocateHeap( GetProcessHeap(), 0, buffer, (len + 8) * sizeof(WCHAR) ))) goto failed;
++            buffer = new_buffer;
++            res = GetFinalPathNameByHandleW( handle, buffer, len + 8, VOLUME_NAME_DOS );
++        }
+         if (!res || res > len + 8) goto failed;
+         if (buffer[res - 1] == '\\' && nt_name.Buffer[nt_name.Length / sizeof(WCHAR)] == '\\') res--;
+         wcscpy( buffer + res, nt_name.Buffer + nt_name.Length / sizeof(WCHAR) );
 diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
-index 42c8253..cab510a 100644
+index 42c8253..a6cbf04 100644
 --- a/dlls/ntdll/unix/file.c
 +++ b/dlls/ntdll/unix/file.c
 @@ -4230,6 +4230,95 @@ static NTSTATUS find_drive_nt_root( char *unix_name, unsigned int len,
@@ -224,6 +247,24 @@ index 42c8253..cab510a 100644
  /* remove trailing backslash from NT name; helper for get_nt_and_unix_names */
  static void remove_trailing_backslash( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name )
  {
+@@ -4338,6 +4520,17 @@ NTSTATUS get_nt_and_unix_names( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name
+         for (ULONG i = 0; i < lenA; i++) if (unix_name[i] == '\\') unix_name[i] = '/';
+ 
+         status = find_drive_nt_root( unix_name, lenA, &buffer, disposition );
++        if (!buffer && (!status || status == STATUS_NO_SUCH_FILE))
++        {
++            char *mapped = map_through_prefix_links( unix_name );
++
++            if (mapped)
++            {
++                TRACE( "%s reachable as %s\n", debugstr_a(unix_name), debugstr_a(mapped) );
++                status = find_drive_nt_root( mapped, strlen( mapped ), &buffer, disposition );
++                free( mapped );
++            }
++        }
+         if (buffer)
+         {
+             init_unicode_string( nt_name, buffer );
 diff --git a/dlls/winex11.drv/clipboard.c b/dlls/winex11.drv/clipboard.c
 index ee00156..31ad705 100644
 --- a/dlls/winex11.drv/clipboard.c

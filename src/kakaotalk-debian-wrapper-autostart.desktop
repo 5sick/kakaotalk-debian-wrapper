@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=KakaoTalk
+Name[ko]=카카오톡
+Comment=Start KakaoTalk at login when auto start is enabled in KakaoTalk's settings
+Comment[ko]=카카오톡 설정에서 자동 실행을 켠 경우 로그인할 때 카카오톡을 시작합니다
+TryExec=kakaotalk
+Exec=kakaotalk --autostart-check
+Icon=kakaotalk-debian-wrapper
+Terminal=false
+NoDisplay=true
+X-GNOME-Autostart-enabled=true
+X-KDE-autostart-after=panel

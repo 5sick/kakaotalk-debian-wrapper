@@ -29,6 +29,8 @@ mkdir -p "$STAGE/DEBIAN" "$STAGE/usr/bin" "$STAGE/opt/$PKG" "$DOC/wine-patches" 
 install -m755 "$ROOT/src/kakaotalk" "$STAGE/usr/bin/kakaotalk"
 install -D -m755 "$ROOT/src/open-helper" "$STAGE/usr/lib/$PKG/open"
 install -m644 "$ROOT/src/$PKG.desktop" "$STAGE/usr/share/applications/$PKG.desktop"
+# 카카오톡 설정의 자동 실행을 로그인 때 대신 확인한다 (src/kakaotalk --autostart-check)
+install -D -m644 "$ROOT/src/$PKG-autostart.desktop" "$STAGE/etc/xdg/autostart/$PKG.desktop"
 install -m644 "$ROOT/src/$PKG.svg" "$STAGE/usr/share/icons/hicolor/scalable/apps/$PKG.svg"
 cp -a "$WINE_DIR" "$STAGE/opt/$PKG/wine"
 
@@ -46,6 +48,7 @@ sed -e "s/@VERSION@/$VERSION/" \
     -e "s/@INSTALLED_SIZE@/$INSTALLED_SIZE/" \
     -e "s#@HOMEPAGE@#$HOMEPAGE#" \
     "$ROOT/packaging/control.in" >"$STAGE/DEBIAN/control"
+echo "/etc/xdg/autostart/$PKG.desktop" >"$STAGE/DEBIAN/conffiles"
 
 mkdir -p "$ROOT/dist"
 OUT="$ROOT/dist/${PKG}_${VERSION}_amd64.deb"

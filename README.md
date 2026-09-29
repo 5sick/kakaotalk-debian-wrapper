@@ -33,7 +33,7 @@ sudo apt install ./kakaotalk-debian-wrapper_*_amd64.deb
 ```sh
 kakaotalk                        # 실행 (처음이면 설치부터)
 kakaotalk --install [설치파일]   # 설치/재설치. 새 Qt 버전(베타) 설치 파일을 직접 줄 수도 있음
-kakaotalk --autostart on|off     # 로그인 시 트레이로 자동 실행
+kakaotalk --autostart on|off     # 로그인 시 트레이로 자동 실행 (카카오톡 설정의 "자동 실행"과 같은 설정)
 kakaotalk --kill                 # 강제 종료
 kakaotalk --reset                # 카카오톡 데이터 전체 삭제 후 초기화
 kakaotalk --help
@@ -97,6 +97,12 @@ Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 실행 �
 
 다른 환경에서 써 보셨다면 이슈로 결과를 알려주세요. 로그인 자동 실행 때는 입력기가 뜰 때까지 최대 15초
 기다립니다. 그래도 한글 입력이 안 되면 카카오톡을 다시 실행하세요.
+
+### 자동 실행
+
+카카오톡 설정의 **자동 실행**을 켜면 로그인할 때 트레이로 시작합니다. `kakaotalk --autostart on|off`도 같은 설정을 바꿉니다.
+(Wine은 Windows처럼 로그인 때 자동 실행 항목을 실행해 주지 않아서, 패키지의 `/etc/xdg/autostart` 항목이 대신 확인합니다.
+데스크톱 설정의 "자동 시작" 목록에서 이 항목을 끄면 카카오톡 설정과 상관없이 자동 실행되지 않습니다.)
 
 ### 트레이 아이콘
 

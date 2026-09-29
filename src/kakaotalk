@@ -10,6 +10,7 @@ CONF="${XDG_CONFIG_HOME:-$HOME/.config}/$APP/env"
 BUNDLED_WINE="/opt/$APP/wine"
 SETUP_URL_DEFAULT="https://app-pc.kakaocdn.net/talk/win32/x64/KakaoTalk_Setup.exe"
 
+# shellcheck source=/dev/null
 [ -f "$CONF" ] && . "$CONF"
 
 # Wine 선택: KAKAOTALK_WINE > 패키지 동봉 Wine > 시스템 wine
@@ -149,6 +150,7 @@ link_fonts() {
 
 # 이 prefix의 wineserver가 떠 있는지 (Wine은 /tmp/.wine-<uid>/server-<dev>-<inode>/socket을 쓴다)
 prefix_running() {
+    # shellcheck disable=SC2046  # 장치 번호와 inode 두 값으로 나눈다
     set -- $(stat -Lc '%d %i' "$WINEPREFIX" 2>/dev/null) || return 1
     [ $# -eq 2 ] && [ -S "/tmp/.wine-$(id -u)/server-$(printf '%x-%x' "$1" "$2")/socket" ]
 }

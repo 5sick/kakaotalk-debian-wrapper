@@ -1,0 +1,54 @@
+# 매주 바깥 상황을 확인하고, 손봐야 할 일이 생기면 이슈를 연다
+#  - 카카오톡 공식 설치 파일 주소가 아직 살아 있는지 (런처 기본값 SETUP_URL_DEFAULT)
+#  - 동봉한 Wine보다 새 안정판(11.0.x 등)이 나왔는지
+name: watch
+
+on:
+  schedule:
+    - cron: '0 0 * * 1'   # 매주 월요일 09:00 KST
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check KakaoTalk installer and Wine releases
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          problems=""
+
+          url=$(sed -n 's/^SETUP_URL_DEFAULT="\(.*\)"$/\1/p' src/kakaotalk)
+          code=$(curl -s -o /dev/null -w '%{http_code}' -r 0-0 "$url" || true)
+          echo "installer $url -> $code"
+          case "$code" in
+            200|206) ;;
+            *) problems="$problems
+          - 카카오톡 설치 파일 주소가 응답하지 않습니다 (HTTP $code): $url
+            첫 설치가 실패하니 \`src/kakaotalk\`의 \`SETUP_URL_DEFAULT\`를 새 주소로 바꿔야 합니다." ;;
+          esac
+
+          current=$(sed -n "s/^  WINE_VERSION: '\(.*\)'$/\1/p" .github/workflows/build.yml)
+          series="${current%.*}.0"
+          latest=$(curl -fsSL "https://dl.winehq.org/wine/source/$series/" |
+            grep -o "wine-${current%.*}\.0[.0-9]*\.tar\.xz" | sed 's/^wine-//; s/\.tar\.xz$//' | sort -uV | tail -1)
+          echo "wine current $current, latest stable in $series: $latest"
+          if [ -n "$latest" ] && [ "$latest" != "$current" ]; then
+            problems="$problems
+          - Wine 새 안정판이 나왔습니다: $latest (지금: $current)
+            \`build.yml\`의 \`WINE_VERSION\`을 올리고 패치가 적용되는지 확인한 뒤 새 버전을 릴리스하세요."
+          fi
+
+          [ -n "$problems" ] || { echo "nothing to do"; exit 0; }
+          title="정기 점검: 확인이 필요한 항목이 있습니다"
+          if gh issue list --state open --search "in:title $title" --json number --jq '.[0].number' | grep -q .; then
+            echo "issue already open"; exit 0
+          fi
+          printf '매주 도는 점검(watch 워크플로)에서 발견했습니다.\n%s\n' "$problems" |
+            gh issue create --title "$title" --body-file -

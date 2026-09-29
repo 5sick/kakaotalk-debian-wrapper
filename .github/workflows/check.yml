@@ -1,0 +1,43 @@
+# push와 PR마다 도는 가벼운 검사: 스크립트 문법, .desktop 파일, 패치가 원본 Wine에 적용되는지
+name: check
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+env:
+  WINE_VERSION: '11.0'
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Shell scripts
+        run: |
+          for f in src/kakaotalk src/open-helper scripts/*.sh packaging/*.sh; do sh -n "$f"; done
+          shellcheck -s sh -S warning src/kakaotalk src/open-helper scripts/*.sh packaging/*.sh
+
+      - name: Desktop files
+        run: |
+          sudo apt-get install -y -qq desktop-file-utils >/dev/null
+          desktop-file-validate src/*.desktop
+
+      - name: Cache Wine source
+        uses: actions/cache@v4
+        with:
+          path: build/wine-${{ env.WINE_VERSION }}.tar.xz
+          key: wine-src-${{ env.WINE_VERSION }}
+
+      - name: Patches apply to Wine ${{ env.WINE_VERSION }}
+        run: |
+          mkdir -p build
+          [ -f "build/wine-$WINE_VERSION.tar.xz" ] ||
+            curl -fsSL -o "build/wine-$WINE_VERSION.tar.xz" "https://dl.winehq.org/wine/source/$WINE_VERSION/wine-$WINE_VERSION.tar.xz"
+          mkdir /tmp/wine && tar -xf "build/wine-$WINE_VERSION.tar.xz" -C /tmp/wine --strip-components=1
+          for p in patches/*.patch; do
+            echo "== $p"
+            patch -d /tmp/wine -p1 --forward --quiet < "$p"
+          done

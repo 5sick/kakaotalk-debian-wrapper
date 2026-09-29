@@ -2,12 +2,12 @@
 # 깨끗한 배포판 컨테이너에 .deb를 설치하고 동봉 Wine이 실제로 동작하는지 확인한다.
 # SPDX-License-Identifier: MIT
 #
-# 사용법: packaging/test-install.sh [이미지...]   (기본: debian:12 ubuntu:22.04 ubuntu:24.04)
+# 사용법: packaging/test-install.sh [이미지...]   (기본: debian:12 debian:13 ubuntu:22.04 ubuntu:24.04 ubuntu:26.04)
 set -eu
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 DEB="$(ls -t "$ROOT"/dist/*.deb | head -1)"
-[ $# -gt 0 ] || set -- debian:12 ubuntu:22.04 ubuntu:24.04
+[ $# -gt 0 ] || set -- debian:12 debian:13 ubuntu:22.04 ubuntu:24.04 ubuntu:26.04
 
 for image in "$@"; do
     echo "=== $image"

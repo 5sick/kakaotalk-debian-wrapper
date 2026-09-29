@@ -4,7 +4,7 @@
 
 ## 현재 상태 (2026-09-29)
 
-- **릴리스**: v0.3.1 (main). 0001~0007 패치: 창 끌기, 투명도, 최소 크기, 폴더 열기, 파일 선택 창(portal),
+- **릴리스**: v0.3.1 (main). Kubuntu 26.04 (Plasma 6.6 Wayland)에서도 전체 기능 확인. 0001~0007 패치: 창 끌기, 투명도, 최소 크기, 폴더 열기, 파일 선택 창(portal),
   폴더 선택 창, 끌어다 놓기/붙여넣기. 자동 실행은 카카오톡 설정을 따름.
   사용자가 실제 데스크톱(KDE X11 + fcitx5)에서 모두 확인함
 - 작업 규칙과 주의점은 저장소 루트의 `CLAUDE.md`를 먼저 읽을 것
@@ -22,11 +22,13 @@
 
 - [ ] **한글 입력 테스트** (README "한글 입력" 표)
   - [ ] GNOME (Wayland) + ibus-hangul: 우분투 기본 환경이라 가장 먼저
-  - [ ] KDE Plasma (Wayland) + fcitx5
+  - [x] KDE Plasma 6.6 (Wayland) + fcitx5: Kubuntu 26.04에서 전체 기능 확인
   - [ ] kime
   - [ ] nimf
 - [ ] **Wayland 세션 동작 범위 정리**: 카카오톡은 XWayland로 실행됨
-  - 분수 배율에서 흐릿함. DPI 감지는 지금 X11(`Xft.dpi`)과 GNOME 설정만 봄
+  - KDE Plasma 6 Wayland: 알림, 자동 실행, 트레이, 파일 창, 끌어다 놓기까지 모두 동작 확인 (Kubuntu 26.04).
+    XWayland 배율을 앱이 직접 처리하는 KDE 기본 설정에서 125%도 선명함
+  - GNOME Wayland는 XWayland 배율 방식이 달라 분수 배율에서 흐릿할 수 있음. DPI 감지는 지금 X11(`Xft.dpi`)과 GNOME 설정만 봄
   - 카카오톡의 화면 캡처 기능, 페이스톡 화면 공유는 Wayland에서 동작하지 않을 가능성이 높음
   - 확인한 결과를 README에 기록
 - [ ] **파일 경로 처리 통합**: 0005(파일 선택 창)의 경로 매핑(`map_to_shared_dir`, `link_folder`)을

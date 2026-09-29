@@ -41,8 +41,8 @@ jobs:
           HOMEPAGE: https://github.com/${{ github.repository }}
         run: packaging/build-deb.sh
 
-      - name: Test install (Debian 12/13, Ubuntu 22.04/24.04)
-        run: packaging/test-install.sh debian:12 debian:13 ubuntu:22.04 ubuntu:24.04
+      - name: Test install (Debian 12/13, Ubuntu 22.04/24.04/26.04)
+        run: packaging/test-install.sh debian:12 debian:13 ubuntu:22.04 ubuntu:24.04 ubuntu:26.04
 
       - name: Checksums
         run: |

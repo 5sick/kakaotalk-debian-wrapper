@@ -64,6 +64,37 @@ file_manager1() {
     return 1
 }
 
+# 카카오톡으로 받은 파일 중 실행될 수 있는 것은 기본 앱으로 열지 않는다. 데스크톱 환경에 따라 xdg-open이
+# .desktop 파일이나 스크립트를 바로 실행할 수 있어서, 대신 파일 관리자에서 선택만 해서 보여준다.
+is_executable() {
+    [ -f "$1" ] || return 1
+    [ -x "$1" ] && return 0
+    case "$(printf '%s' "${1##*/}" | tr 'A-Z' 'a-z')" in
+        *.desktop|*.sh|*.bash|*.zsh|*.csh|*.fish|*.run|*.bin|*.appimage|*.py|*.pl|*.rb|*.jar|*.deb|*.rpm|\
+        *.exe|*.msi|*.bat|*.cmd|*.com|*.scr|*.pif|*.ps1|*.vbs|*.vbe|*.wsf|*.hta|*.lnk|*.reg|*.cpl|*.jse)
+            return 0 ;;
+    esac
+    command -v file >/dev/null || return 1
+    case "$(file -b --mime-type -- "$1" 2>/dev/null)" in
+        application/x-executable|application/x-pie-executable|application/x-sharedlib|\
+        application/x-desktop|text/x-shellscript|application/x-shellscript|application/vnd.appimage|\
+        application/x-msdownload|application/x-dosexec|application/x-ms-shortcut)
+            return 0 ;;
+    esac
+    return 1
+}
+
+open_path() {
+    if is_executable "$1"; then
+        command -v notify-send >/dev/null &&
+            notify-send -a KakaoTalk -i dialog-warning "KakaoTalk" \
+                "실행할 수 있는 파일이라 바로 열지 않고 파일 관리자에서 보여줍니다: ${1##*/}" 2>/dev/null
+        file_manager1 ShowItems "$(file_uri "$1")" && exit 0
+        exec xdg-open "$(dirname -- "$1")"
+    fi
+    exec xdg-open "$1"
+}
+
 case "${1:-}" in
     --select|--folder)
         mode="$1"; shift
@@ -84,7 +115,9 @@ case "${1:-}" in
         fi
         exec xdg-open "$first" ;;
     file://*)
-        exec xdg-open "$(real_path "$(url_decode "${1#file://}")")" ;;
+        open_path "$(real_path "$(url_decode "${1#file://}")")" ;;
+    /*)
+        open_path "$(real_path "$1")" ;;
     *)
         exec xdg-open "${1:-}" ;;
 esac

@@ -1,0 +1,38 @@
+-----BEGIN PGP SIGNED MESSAGE-----
+Hash: SHA512
+
+Architectures: amd64
+Codename: stable
+Components: main
+Date: Tue, 29 Sep 2026 15:22:09 +0000
+Label: kakaotalk-debian-wrapper
+Origin: kakaotalk-debian-wrapper
+Suite: stable
+MD5Sum:
+ 0b54e35c94b534826c3d088d1d4f714c             1728 main/binary-amd64/Packages
+ 52ef412d78b7df0bfda62c348c966a53              993 main/binary-amd64/Packages.gz
+SHA1:
+ 0750d09936f20a53ccd24882209e5187cdbbd0aa             1728 main/binary-amd64/Packages
+ e6b86bdf2eb4b9af2aee017699926cf29d721140              993 main/binary-amd64/Packages.gz
+SHA256:
+ 8429490a656c83153fd6c4ba150fc53c6ac97c26f922ad8d7fe0a9546b5b138c             1728 main/binary-amd64/Packages
+ b01cef09d23328c637e677aeee274186382bfafe3774ec9b64905d0c75f0be9f              993 main/binary-amd64/Packages.gz
+SHA512:
+ 121f4a0c60c5d0faae917d841eb702278858be6969ccd233dbd4b73d19d920900aa05cc6950a221e8f7cd5081525fe7c1e1a2689f6e92b14709aa16265c79d26             1728 main/binary-amd64/Packages
+ b69270eedab361a832c4cb31042efe381d732d5473c1de862afb921506c15628b1e8b7c41bff3efc95cced93def2b059323c476abdff411e840e63a80e67da4d              993 main/binary-amd64/Packages.gz
+-----BEGIN PGP SIGNATURE-----
+
+iQIzBAEBCgAdFiEEXCmrFXrlne8RjvgwpuJ/CZ6CxfgFAmq716EACgkQpuJ/CZ6C
+xfhESw//WFKrWyZ/4vPw/jMB6qxuVL7/TVnaEvVbBuO6UjCVLzRy4mMTIWVk9gfQ
+ueMq5vR4n4uXIgnPvdaW23OaCS9NBr5P3wFAIQ/sTnq/MOWg4oRX5fgA3QZPvXXK
+EiWRKnwx1xklIsXECzcUrJi8lhvMgaBwbP6Ts4LFNwEAq6hvTFMJGIChi2sOVdBr
+kyIUyWN7BHqjsrh+VaR0mzHv4BYiuUqOE1CcW7T5h/S+E4XhR5gfhe5iDO2WIV8P
+h7Ztwz/9J0xY2drEcxTwXZlDHYawz7BismJqetzCADoq/qUE4onX9RJwQkoNaOg1
+Mh1zbKK4rh/WxodkmbgHIKGvgyppNF1ZqvGgso0sumFHpfRDFcZG1lsFKMzygbQ0
+HFTOsH4W8VtAPxGrX+2X+0NO7KEEm38Svn97K7GOZhgFHr6qH6XIZQrwAd1hlcVz
+6fhjCoo213sX/5x/PGw8mk+Ik+l8eZ3NNwzfcpYrDFVDHUOGqvBOsQCdM7rvGtKo
+AxkKI2tLIC9S6RqFJl37gDodBOjGr2oMWBUaeq4gE19dz5wH0avxOMYIdR11lAm5
+VmAJtAJXujGQkh2VFOGhXPJFnyg27ic+h2FsiVzFxKvocv/l30tByJ3ql3GBX9lh
+qg4vAtKu3aUFm7KFt6zfmPIYRLdKU806tSEfufZXtzEUlVlxy+E=
+=Yk5Y
+-----END PGP SIGNATURE-----

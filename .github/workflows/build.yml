@@ -68,3 +68,11 @@ jobs:
           } > /tmp/notes.md
           gh release create "$GITHUB_REF_NAME" dist/*.deb "dist/wine-$WINE_VERSION.tar.xz" dist/SHA256SUMS \
             --title "$GITHUB_REF_NAME" --notes-file /tmp/notes.md
+
+      - name: Publish APT repository (GitHub Pages)
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          APT_SIGNING_KEY: ${{ secrets.APT_SIGNING_KEY }}
+        run: |
+          command -v apt-ftparchive >/dev/null || sudo apt-get install -y -qq apt-utils
+          packaging/publish-apt.sh

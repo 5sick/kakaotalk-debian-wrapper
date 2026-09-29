@@ -1,3 +1,17 @@
+kakaotalk-debian-wrapper (0.3.2) unstable; urgency=medium
+
+  * Updates through APT: the package registers the project's signed APT
+    repository (GitHub Pages), so new versions arrive with apt upgrade.
+  * open-helper: received files that could be executed (.desktop files,
+    scripts, Windows executables, anything executable) are shown selected in
+    the file manager instead of being opened.
+  * CI: light checks on every push and pull request (shell syntax,
+    shellcheck, desktop files, patches apply), a weekly check of the official
+    installer URL and new Wine releases, and install tests on Ubuntu 26.04.
+  * Verified on Kubuntu 26.04 (KDE Plasma 6.6, Wayland).
+
+ -- kakaotalk-debian-wrapper contributors  Wed, 30 Sep 2026 00:30:00 +0900
+
 kakaotalk-debian-wrapper (0.3.1) unstable; urgency=medium
 
   * Wine patch: drag and drop and pasting files from Linux work without the Z:

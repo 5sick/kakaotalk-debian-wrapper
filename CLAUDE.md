@@ -20,6 +20,10 @@ Windows 카카오톡을 패치한 Wine 11.0(wow64, X11 드라이버)으로 실�
 - **커밋 작성자**: 저장소 로컬 설정 `5sick <213179368+5sick@users.noreply.github.com>`. 실제 이메일은 공개하지 않습니다.
 - **릴리스**: `VERSION`과 `packaging/changelog` 최신 항목을 올리고 `vX.Y.Z` 태그를 push하면 CI가 릴리스합니다. 태그와 `VERSION`이 다르면 CI가 실패합니다.
 - **main 병합, 태그, 릴리스는 사용자 확인 후에만** 합니다.
+- 태그 릴리스 때 CI가 `packaging/publish-apt.sh`로 서명된 APT 저장소를 `gh-pages`(GitHub Pages)에 다시 만듭니다 (최근 3개 버전).
+  서명 키는 저장소 비밀값 `APT_SIGNING_KEY`, 공개 키는 `packaging/apt/`에 있습니다. 개인 키 백업은 사용자 PC의
+  `~/kakaotalk-debian-wrapper-apt-signing-key.asc`에만 있으니 저장소에 넣지 않습니다.
+- `watch.yml`이 매주 공식 설치 파일 주소와 Wine 새 안정판을 확인하고 이슈를 엽니다. 그 이슈가 오면 처리합니다.
 - **라이선스**: 런처/스크립트는 MIT, `patches/`는 LGPL-2.1+. 카카오톡 바이너리와 아이콘은 저장소에 넣지 않습니다.
 - 런처의 레지스트리 설정을 바꾸면 `TWEAKS_VERSION`을 올립니다 (기존 prefix에 다시 적용됨).
 - 스타일: 런처/도우미는 한국어 주석과 메시지, POSIX sh. Wine 패치는 Wine 코딩 스타일.

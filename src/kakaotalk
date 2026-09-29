@@ -147,6 +147,12 @@ link_fonts() {
     done
 }
 
+# 이 prefix의 wineserver가 떠 있는지 (Wine은 /tmp/.wine-<uid>/server-<dev>-<inode>/socket을 쓴다)
+prefix_running() {
+    set -- $(stat -Lc '%d %i' "$WINEPREFIX" 2>/dev/null) || return 1
+    [ $# -eq 2 ] && [ -S "/tmp/.wine-$(id -u)/server-$(printf '%x-%x' "$1" "$2")/socket" ]
+}
+
 # 카카오톡(Windows 쪽)에서 보이는 리눅스 폴더를 제한한다. 보안 샌드박스는 아니고,
 # Wine 기본값(Z: = /, Templates = 홈 전체)처럼 불필요하게 넓게 열어두지 않는 정도다.
 # Wine이 prefix를 업데이트할 때 연결을 다시 만들기 때문에 실행할 때마다 적용한다.
@@ -179,8 +185,11 @@ apply_file_access() {
     templates="$userdir/AppData/Roaming/Microsoft/Windows/Templates"
     [ -L "$templates" ] && rm -f "$templates" && mkdir -p "$templates"
 
-    # 공유 폴더 밖에서 첨부한 파일은 리눅스 파일 선택 창이 여기에 복사해 둔다 (patches/0005)
-    rm -rf "$userdir/AppData/Local/Temp/host-files"
+    # 공유 폴더 밖의 파일: 파일 선택 창은 여기에 복사해 두고(patches/0005), 끌어다 놓거나
+    # 붙여넣은 파일은 여기에 링크한다(patches/0007). 카카오톡이 실행 중이 아닐 때만 지운다.
+    if ! prefix_running; then
+        rm -rf "$userdir/AppData/Local/Temp/host-files" "$WINEPREFIX/drive_c/windows/temp/host-files"
+    fi
 
     if [ -n "${KAKAOTALK_FULL_ACCESS:-}" ]; then
         ln -sfn / "$WINEPREFIX/dosdevices/z:"
@@ -360,24 +369,39 @@ integrate_desktop() {
     echo "$class" >"$stamp"
 }
 
+# 카카오톡 설정의 "자동 실행"은 Windows처럼 HKCU\...\Run 에 값을 넣는다. Wine은 로그인 때 이 값을
+# 실행하지 않으므로, 패키지의 /etc/xdg/autostart 항목이 로그인할 때 --autostart-check로 대신 확인한다.
+# 그래서 카카오톡 설정의 자동 실행과 kakaotalk --autostart가 같은 값을 쓴다.
+RUN_KEY='HKCU\Software\Microsoft\Windows\CurrentVersion\Run'
+
+# user.reg의 Run 키에서 카카오톡을 실행하는 값의 이름 (없으면 출력 없음)
+autostart_value() {
+    [ -f "$WINEPREFIX/user.reg" ] || return 0
+    awk '
+        /^\[/ { inrun = (index($0, "[Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Run]") == 1); next }
+        inrun && /KakaoTalk(UI)?\.exe/ { sub(/^"/, ""); sub(/"=.*/, ""); print; exit }
+    ' "$WINEPREFIX/user.reg"
+}
+
 set_autostart() {
-    dir="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
+    # 예전 버전(0.2.x)이 만든 사용자 자동 시작 항목은 같은 이름의 시스템 항목을 가리므로 지운다
+    rm -f "${XDG_CONFIG_HOME:-$HOME/.config}/autostart/$APP.desktop"
     case "${1:-}" in
         on)
-            mkdir -p "$dir"
-            cat >"$dir/$APP.desktop" <<EOF
-[Desktop Entry]
-Type=Application
-Name=KakaoTalk
-Exec=kakaotalk -bystartup
-Icon=$APP
-X-GNOME-Autostart-enabled=true
-EOF
-            log "로그인할 때 트레이로 자동 실행합니다." ;;
+            init_prefix
+            exe=$(find_exe)
+            [ -n "$exe" ] || die "카카오톡이 설치되어 있지 않습니다."
+            win=$(winepath -w "$exe" 2>/dev/null)
+            wine reg add "$RUN_KEY" /v Talk /t REG_SZ /d "\"$win\" -bystartup" /f >/dev/null 2>&1 ||
+                die "자동 실행을 켜지 못했습니다."
+            log "로그인할 때 트레이로 자동 실행합니다. (카카오톡 설정의 자동 실행과 같은 설정입니다)" ;;
         off)
-            rm -f "$dir/$APP.desktop"
+            name=$(autostart_value)
+            [ -n "$name" ] && wine reg delete "$RUN_KEY" /v "$name" /f >/dev/null 2>&1
             log "자동 실행을 껐습니다." ;;
-        *)  die "사용법: kakaotalk --autostart on|off" ;;
+        status)
+            if [ -n "$(autostart_value)" ]; then echo on; else echo off; fi ;;
+        *)  die "사용법: kakaotalk --autostart on|off|status" ;;
     esac
 }
 
@@ -387,7 +411,8 @@ usage() {
 
   (옵션 없음)            카카오톡 실행 (처음이면 설치부터 진행)
   --install [설치파일]   카카오톡 설치/재설치 (파일을 주지 않으면 공식 서버에서 받음)
-  --autostart on|off     로그인 시 자동 실행
+  --autostart on|off|status
+                         로그인 시 자동 실행 (카카오톡 설정의 자동 실행과 같은 설정)
   --config               설정 파일 열기 (공유 폴더, 글꼴 엔진 등)
   --winecfg              Wine 설정 열기
   --kill                 카카오톡과 Wine 프로세스 강제 종료
@@ -409,6 +434,10 @@ case "${1:-}" in
     --init)    init_prefix; exit ;;
     --install) init_prefix; install_app "${2:-}"; exe=$(find_exe); [ -n "$exe" ] && integrate_desktop "$exe"; exit ;;
     --autostart) set_autostart "${2:-}"; exit ;;
+    --autostart-check)
+        # 로그인 때 /etc/xdg/autostart 항목이 부른다. 자동 실행이 꺼져 있으면 아무것도 하지 않는다.
+        [ -n "$(autostart_value)" ] || exit 0
+        set -- -bystartup ;;
     --reset)   reset_prefix "${2:-}"; exit ;;
     --config)  edit_config ;;
     --winecfg) exec winecfg ;;

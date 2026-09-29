@@ -1,3 +1,17 @@
+kakaotalk-debian-wrapper (0.3.1) unstable; urgency=medium
+
+  * Wine patch: drag and drop and pasting files from Linux work without the Z:
+    drive. Files in the shared folders are passed through their folder links,
+    other files are linked one by one into C:\windows\temp\host-files\.
+  * Launcher: clean up the temporary file links and copies only when
+    KakaoTalk isn't running.
+  * Auto start at login now follows KakaoTalk's own "start automatically"
+    setting: Wine never runs the HKCU Run entry KakaoTalk writes, so an
+    /etc/xdg/autostart entry checks it at login (kakaotalk --autostart-check).
+    kakaotalk --autostart on|off|status edits the same registry value.
+
+ -- kakaotalk-debian-wrapper contributors  Mon, 28 Sep 2026 23:30:00 +0900
+
 kakaotalk-debian-wrapper (0.3.0) unstable; urgency=medium
 
   * Wine patch: "Open folder" (explorer.exe /select, SHOpenFolderAndSelectItems)

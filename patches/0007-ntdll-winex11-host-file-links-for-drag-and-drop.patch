@@ -1,0 +1,319 @@
+From: 5sick <213179368+5sick@users.noreply.github.com>
+Subject: [PATCH] ntdll, winex11: Map host files through prefix links for drag and drop and paste.
+
+Without a Z: drive, files dropped or pasted from Linux became \\?\unix\...
+paths, which applications can't open (even files in the shared folders,
+because those are reached through symlinks inside the prefix, which
+find_drive_nt_root doesn't follow backwards).
+
+unix_to_nt_file_name() and \??\unix\ names in get_nt_and_unix_names(): when
+no drive maps a Unix path, look for a symlink in drive_c/users/<user>/ (the
+shell folder links) or drive_c/Linux/ (folders picked with the host file
+chooser) whose target contains the path, and use the path through that link.
+Nothing changes when a drive maps the path. wine_get_dos_file_name() retries
+with a larger buffer, as the DOS name can now be longer than the Unix name.
+
+New ntdll_get_host_dos_file_name(): like ntdll_get_dos_file_name(), but for
+files the user hands to an application. If the file is still unreachable,
+only that file or folder is linked into
+C:\windows\temp\host-files\<unique>\ (an existing link is reused). winex11
+uses it for text/uri-list and file list drops and for pasted file lists.
+---
+diff --git a/dlls/kernel32/path.c b/dlls/kernel32/path.c
+index 1f0d4c3..6c8ef46 100644
+--- a/dlls/kernel32/path.c
++++ b/dlls/kernel32/path.c
+@@ -511,6 +511,16 @@ WCHAR * CDECL wine_get_dos_file_name( LPCSTR str )
+         if (!set_ntstatus( status )) goto failed;
+         if (!(buffer = RtlAllocateHeap( GetProcessHeap(), 0, (len + 8) * sizeof(WCHAR) ))) goto failed;
+         res = GetFinalPathNameByHandleW( handle, buffer, len + 8, VOLUME_NAME_DOS );
++        if (res > len + 8)
++        {
++            /* the DOS name can be longer than the Unix one (e.g. reached through a prefix link) */
++            WCHAR *new_buffer;
++
++            len = res + len;
++            if (!(new_buffer = RtlReAllocateHeap( GetProcessHeap(), 0, buffer, (len + 8) * sizeof(WCHAR) ))) goto failed;
++            buffer = new_buffer;
++            res = GetFinalPathNameByHandleW( handle, buffer, len + 8, VOLUME_NAME_DOS );
++        }
+         if (!res || res > len + 8) goto failed;
+         if (buffer[res - 1] == '\\' && nt_name.Buffer[nt_name.Length / sizeof(WCHAR)] == '\\') res--;
+         wcscpy( buffer + res, nt_name.Buffer + nt_name.Length / sizeof(WCHAR) );
+diff --git a/dlls/ntdll/unix/file.c b/dlls/ntdll/unix/file.c
+index 42c8253..a6cbf04 100644
+--- a/dlls/ntdll/unix/file.c
++++ b/dlls/ntdll/unix/file.c
+@@ -4230,6 +4230,95 @@ static NTSTATUS find_drive_nt_root( char *unix_name, unsigned int len,
+ }
+ 
+ 
++/* canonical path; for a file that does not exist yet only the directory is resolved */
++static char *canonicalize_unix_name( const char *unix_name )
++{
++    const char *slash = strrchr( unix_name, '/' );
++    char *dir, *real, *ret;
++
++    if ((ret = realpath( unix_name, NULL ))) return ret;
++    if (!slash || slash == unix_name) return NULL;
++    if (!(dir = strndup( unix_name, slash - unix_name ))) return NULL;
++    real = realpath( dir, NULL );
++    free( dir );
++    if (!real) return NULL;
++    if (asprintf( &ret, "%s%s", real, slash ) == -1) ret = NULL;
++    free( real );
++    return ret;
++}
++
++/* look for the symlink in dir whose target contains path, keeping the longest target */
++static void find_prefix_link( const char *dir, const char *path, char **best, size_t *best_len )
++{
++    struct dirent *de;
++    struct stat st;
++    char *link, *target;
++    size_t len;
++    DIR *d;
++
++    if (!(d = opendir( dir ))) return;
++    while ((de = readdir( d )))
++    {
++        if (de->d_name[0] == '.') continue;
++        if (asprintf( &link, "%s/%s", dir, de->d_name ) == -1) continue;
++        if (!lstat( link, &st ) && S_ISLNK( st.st_mode ) && (target = realpath( link, NULL )))
++        {
++            len = strlen( target );
++            if (len > 1 && len > *best_len && !strncmp( path, target, len ) &&
++                (!path[len] || path[len] == '/'))
++            {
++                free( *best );
++                if (asprintf( best, "%s%s", link, path + len ) == -1) *best = NULL;
++                *best_len = *best ? len : 0;
++            }
++            free( target );
++        }
++        free( link );
++    }
++    closedir( d );
++}
++
++/***********************************************************************
++ *           map_through_prefix_links
++ *
++ * A Unix path that no drive maps may still be reachable through a symlink
++ * inside the prefix: the user shell folders (drive_c/users/<user>/Documents
++ * etc.), which point to host directories, and the folders linked into C:\Linux
++ * (see ntdll_get_host_dos_file_name). Return the path through that link.
++ */
++static char *map_through_prefix_links( const char *unix_name )
++{
++    char *path, *users, *dir, *best = NULL;
++    size_t best_len = 0;
++    struct dirent *de;
++    DIR *d;
++
++    if (!(path = canonicalize_unix_name( unix_name ))) return NULL;
++
++    if (asprintf( &users, "%s/drive_c/users", config_dir ) != -1)
++    {
++        if ((d = opendir( users )))
++        {
++            while ((de = readdir( d )))
++            {
++                if (de->d_name[0] == '.') continue;
++                if (asprintf( &dir, "%s/%s", users, de->d_name ) == -1) continue;
++                find_prefix_link( dir, path, &best, &best_len );
++                free( dir );
++            }
++            closedir( d );
++        }
++        free( users );
++    }
++    if (asprintf( &dir, "%s/drive_c/Linux", config_dir ) != -1)
++    {
++        find_prefix_link( dir, path, &best, &best_len );
++        free( dir );
++    }
++    free( path );
++    return best;
++}
++
+ /******************************************************************
+  *           unix_to_nt_file_name
+  */
+@@ -4246,6 +4335,14 @@ NTSTATUS unix_to_nt_file_name( const char *unix_name, WCHAR **nt, UINT dispositi
+     free( name );
+     if (status && status != STATUS_NO_SUCH_FILE) return status;
+ 
++    if (!buffer && (name = map_through_prefix_links( unix_name )))
++    {
++        TRACE( "%s reachable as %s\n", debugstr_a(unix_name), debugstr_a(name) );
++        status = find_drive_nt_root( name, strlen( name ), &buffer, disposition );
++        free( name );
++        if (status && status != STATUS_NO_SUCH_FILE) return status;
++    }
++
+     if (!buffer)  /* conversion failed, return \\?\unix path */
+     {
+         if (!(buffer = malloc( sizeof(unix_prefixW) + len * sizeof(WCHAR) ))) return STATUS_NO_MEMORY;
+@@ -4277,6 +4374,91 @@ NTSTATUS ntdll_get_dos_file_name( const char *unix_name, WCHAR **dos, UINT dispo
+ }
+ 
+ 
++/* existing link to target in one of the directories below root */
++static char *find_host_file_link( const char *root, const char *base, const char *target )
++{
++    char *link, *ret = NULL, current[PATH_MAX];
++    struct dirent *de;
++    ssize_t len;
++    DIR *d;
++
++    if (!(d = opendir( root ))) return NULL;
++    while (!ret && (de = readdir( d )))
++    {
++        if (de->d_name[0] == '.') continue;
++        if (asprintf( &link, "%s/%s/%s", root, de->d_name, base ) == -1) continue;
++        if ((len = readlink( link, current, sizeof(current) - 1 )) >= 0)
++        {
++            current[len] = 0;
++            if (!strcmp( current, target )) ret = link;
++        }
++        if (!ret) free( link );
++    }
++    closedir( d );
++    return ret;
++}
++
++/******************************************************************
++ *           ntdll_get_host_dos_file_name
++ *
++ * DOS name for a Unix file that the user hands to an application (drag and
++ * drop, paste). When the prefix can't reach it (no drive maps it, e.g. no Z:),
++ * only that file or folder is linked into C:\windows\temp\host-files\<unique>\.
++ * The links are temporary and may be removed when no application runs.
++ */
++NTSTATUS ntdll_get_host_dos_file_name( const char *unix_name, WCHAR **dos )
++{
++    static const WCHAR unix_dos_prefixW[] = {'\\','\\','?','\\','u','n','i','x','\\',0};
++    char *target, *root = NULL, *link = NULL, *dir = NULL;
++    const char *base;
++    NTSTATUS status;
++
++    status = ntdll_get_dos_file_name( unix_name, dos, FILE_OPEN );
++    if (status || !*dos || wcsncmp( *dos, unix_dos_prefixW, ARRAY_SIZE(unix_dos_prefixW) - 1 )) return status;
++
++    if (!(target = realpath( unix_name, NULL ))) return status;
++    base = strrchr( target, '/' ) + 1;
++    if (!*base) goto done;
++
++    if (asprintf( &root, "%s/drive_c/windows/temp/host-files", config_dir ) == -1)
++    {
++        root = NULL;
++        goto done;
++    }
++    mkdir( root, 0700 );
++    if (!(link = find_host_file_link( root, base, target )))
++    {
++        if (asprintf( &dir, "%s/XXXXXX", root ) == -1)
++        {
++            dir = NULL;
++            goto done;
++        }
++        if (!mkdtemp( dir )) goto done;
++        if (asprintf( &link, "%s/%s", dir, base ) == -1)
++        {
++            link = NULL;
++            goto done;
++        }
++        if (symlink( target, link ))
++        {
++            WARN( "failed to link %s: %s\n", debugstr_a(link), strerror( errno ) );
++            rmdir( dir );
++            goto done;
++        }
++    }
++    free( *dos );
++    status = ntdll_get_dos_file_name( link, dos, FILE_OPEN );
++    TRACE( "%s -> %s\n", debugstr_a(unix_name), debugstr_w(*dos) );
++
++done:
++    free( link );
++    free( dir );
++    free( root );
++    free( target );
++    return status;
++}
++
++
+ /* remove trailing backslash from NT name; helper for get_nt_and_unix_names */
+ static void remove_trailing_backslash( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name )
+ {
+@@ -4338,6 +4520,17 @@ NTSTATUS get_nt_and_unix_names( OBJECT_ATTRIBUTES *attr, UNICODE_STRING *nt_name
+         for (ULONG i = 0; i < lenA; i++) if (unix_name[i] == '\\') unix_name[i] = '/';
+ 
+         status = find_drive_nt_root( unix_name, lenA, &buffer, disposition );
++        if (!buffer && (!status || status == STATUS_NO_SUCH_FILE))
++        {
++            char *mapped = map_through_prefix_links( unix_name );
++
++            if (mapped)
++            {
++                TRACE( "%s reachable as %s\n", debugstr_a(unix_name), debugstr_a(mapped) );
++                status = find_drive_nt_root( mapped, strlen( mapped ), &buffer, disposition );
++                free( mapped );
++            }
++        }
+         if (buffer)
+         {
+             init_unicode_string( nt_name, buffer );
+diff --git a/dlls/winex11.drv/clipboard.c b/dlls/winex11.drv/clipboard.c
+index ee00156..31ad705 100644
+--- a/dlls/winex11.drv/clipboard.c
++++ b/dlls/winex11.drv/clipboard.c
+@@ -656,7 +656,7 @@ static WCHAR* uri_to_dos(char *encodedURI)
+             if (uri[7] == '/')
+             {
+                 /* file:///path/to/file (nautilus, thunar) */
+-                ntdll_get_dos_file_name( &uri[7], &ret, FILE_OPEN );
++                ntdll_get_host_dos_file_name( &uri[7], &ret );
+             }
+             else if (uri[7])
+             {
+@@ -670,7 +670,7 @@ static WCHAR* uri_to_dos(char *encodedURI)
+                         (!gethostname(hostname, sizeof(hostname)) && !strcmp(hostname, &uri[7])))
+                     {
+                         *path = '/';
+-                        ntdll_get_dos_file_name( path, &ret, FILE_OPEN );
++                        ntdll_get_host_dos_file_name( path, &ret );
+                     }
+                 }
+             }
+@@ -678,7 +678,7 @@ static WCHAR* uri_to_dos(char *encodedURI)
+         else if (uri[6])
+         {
+             /* file:/path/to/file (konqueror) */
+-            ntdll_get_dos_file_name( &uri[5], &ret, FILE_OPEN );
++            ntdll_get_host_dos_file_name( &uri[5], &ret );
+         }
+     }
+     free( uri );
+@@ -955,7 +955,7 @@ DROPFILES *file_list_to_drop_files( const void *data, size_t size, size_t *ret_s
+ 
+     for (ptr = data; ptr < (const char *)data + size; ptr += strlen( ptr ) + 1)
+     {
+-        ntdll_get_dos_file_name( ptr, &path, FILE_OPEN );
++        ntdll_get_host_dos_file_name( ptr, &path );
+ 
+         TRACE( "converted URI %s to DOS path %s\n", debugstr_a(ptr), debugstr_w(path) );
+ 
+diff --git a/include/wine/unixlib.h b/include/wine/unixlib.h
+index 364625b..9602f7c 100644
+--- a/include/wine/unixlib.h
++++ b/include/wine/unixlib.h
+@@ -43,6 +43,7 @@ extern DECLSPEC_EXPORT const unixlib_entry_t __wine_unix_call_wow64_funcs[];
+ NTSYSAPI const WCHAR *ntdll_get_build_dir(void);
+ NTSYSAPI const WCHAR *ntdll_get_data_dir(void);
+ NTSYSAPI NTSTATUS ntdll_get_dos_file_name( const char *unix_name, WCHAR **dos, UINT disposition );
++NTSYSAPI NTSTATUS ntdll_get_host_dos_file_name( const char *unix_name, WCHAR **dos );
+ NTSYSAPI NTSTATUS ntdll_get_unix_file_name( const WCHAR *dos, char **unix_name, UINT disposition );
+ 
+ /* exception handling */

@@ -18,7 +18,7 @@
 ## 0.4.0: 환경 지원 넓히기
 
 - [ ] **한글 입력 테스트** (README "한글 입력" 표)
-  - [ ] GNOME (Wayland) + ibus-hangul: 우분투 기본 환경이라 가장 먼저
+  - [ ] GNOME (Wayland) + ibus-hangul: 우분투 기본 환경이라 가장 먼저. 절차와 확인 목록은 `docs/testing-gnome-ibus.md`
   - [x] KDE Plasma 6.6 (Wayland) + fcitx5: Kubuntu 26.04에서 전체 기능 확인
   - [ ] kime
   - [ ] nimf
@@ -34,7 +34,8 @@
 ## 이후
 
 - [ ] **페이스톡 영상 깜빡임** 원인 조사 (README 알려진 문제)
-- [ ] **Wine 업스트림 제출**: 범용 수정(아래 표)을 WineHQ에 제출해서 Wine 버전을 올릴 때 패치를 다시 맞추는 부담 줄이기
+- [ ] **Wine 업스트림 제출**: 0001, 0003을 Wine 11.18 기준으로 맞춘 패치와 제출 방법을 `docs/upstream/`에 준비함 (컴파일 확인).
+  제출은 실명 작성자로 GitLab 머지 리퀘스트를 열어야 해서 사용자가 직접 할 것
 - [ ] **Wine 버전업 절차**: 11.x 안정판이 나오면 패치 적용, 빌드, 기본 동작을 확인하는 체크리스트나 스크립트
 
 ## Wine 패치 분류

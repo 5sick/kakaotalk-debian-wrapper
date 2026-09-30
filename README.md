@@ -107,7 +107,7 @@ Wine은 입력기의 X 입력 방식(XIM)을 사용합니다. 런처가 실행 �
 |---|---|
 | KDE Plasma 5.27 (X11) + fcitx5 — Kubuntu 24.04 | ✅ 확인됨 |
 | KDE Plasma 6.6 (Wayland) + fcitx5 — Kubuntu 26.04 | ✅ 확인됨 |
-| GNOME (Wayland) + ibus-hangul (우분투 기본) | 테스트 예정 |
+| GNOME (Wayland) + ibus-hangul (우분투 기본) | 테스트 예정 ([테스트 방법](docs/testing-gnome-ibus.md)) |
 | kime, nimf | 테스트 예정 |
 
 위 두 KDE 환경에서는 한글 입력뿐 아니라 알림, 자동 실행, 트레이, 창 끌기와 크기 조절, 파일 첨부/저장 창,

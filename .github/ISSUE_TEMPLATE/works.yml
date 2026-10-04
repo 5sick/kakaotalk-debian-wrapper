@@ -1,0 +1,27 @@
+name: 동작 확인 보고
+description: README "한글 입력" 표에 아직 없는 환경에서 써 본 결과 (잘 되는 경우도 환영합니다)
+labels: [compatibility]
+body:
+  - type: textarea
+    id: report
+    attributes:
+      label: kakaotalk --report 출력
+      render: markdown
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 확인한 기능
+      options:
+        - label: 한글 입력
+        - label: 알림
+        - label: 트레이 아이콘
+        - label: 파일 첨부/저장 창 (리눅스 파일 선택 창)
+        - label: 폴더 열기 (리눅스 파일 관리자)
+        - label: 끌어다 놓기와 붙여넣기
+        - label: 로그인 시 자동 실행
+  - type: textarea
+    id: notes
+    attributes:
+      label: 안 되거나 이상한 점

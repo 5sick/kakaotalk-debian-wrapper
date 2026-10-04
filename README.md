@@ -14,18 +14,20 @@ Debian/Ubuntu에서 Windows용 카카오톡을 **설치 한 번으로 자연스�
 
 ## 설치
 
-[Releases](../../releases)에서 `.deb`를 받아서:
+1. [Releases](../../releases/latest)에서 `kakaotalk-debian-wrapper_*_amd64.deb`를 받습니다.
+2. 받은 폴더에서 설치합니다.
+   ```sh
+   sudo apt install ./kakaotalk-debian-wrapper_*_amd64.deb
+   ```
+3. 앱 메뉴에서 **카카오톡**을 실행합니다. 처음 실행하면 카카오 공식 서버에서 설치 파일을 받아 설치 화면을 띄웁니다.
 
-```sh
-sudo apt install ./kakaotalk-debian-wrapper_*_amd64.deb
-```
+**업데이트는 자동**입니다. 설치할 때 이 프로젝트의 APT 저장소가 함께 등록되어(Chrome과 같은 방식),
+새 버전은 `sudo apt update && sudo apt upgrade`로 받습니다. 0.3.1 이하를 쓰고 있다면 새 .deb를 한 번만 직접 설치하세요.
 
-앱 메뉴에서 **카카오톡**을 실행하거나 터미널에서 `kakaotalk`을 실행하면 됩니다.
-처음 실행하면 Wine 환경을 준비하고 설치 파일을 받아 설치 화면을 띄웁니다.
+문제가 생기면 `kakaotalk --report` 출력을 붙여서 [이슈](../../issues/new/choose)로 알려주세요.
 
-**업데이트**: 0.3.2부터 .deb를 설치하면 이 프로젝트의 APT 저장소가 자동으로 등록되어,
-새 버전이 나오면 `sudo apt update && sudo apt upgrade`로 받습니다. (Chrome 등과 같은 방식입니다)
-0.3.1 이하를 쓰고 있다면 새 .deb를 한 번만 직접 설치하면 됩니다. 저장소를 먼저 등록해서 설치하려면:
+<details>
+<summary>.deb를 받지 않고 APT 저장소로 바로 설치하기</summary>
 
 ```sh
 sudo curl -fsSLo /usr/share/keyrings/kakaotalk-debian-wrapper.gpg \
@@ -36,6 +38,8 @@ sudo apt update && sudo apt install kakaotalk-debian-wrapper
 ```
 
 저장소 서명 키 지문: `5C29 AB15 7AE5 9DEF 118E  F830 A6E2 7F09 9E82 C5F8`
+
+</details>
 
 **지원 환경**: amd64, Debian 12 이상 / Ubuntu 22.04 이상 (및 파생 배포판). 32비트(i386) 패키지는 필요 없습니다.
 Debian 12, 13과 Ubuntu 22.04, 24.04, 26.04에서 설치 테스트를 하고, X11과 Wayland 세션 모두 실제로 사용해 확인했습니다.
@@ -51,6 +55,7 @@ kakaotalk --install [설치파일]   # 설치/재설치. 새 Qt 버전(베타) �
 kakaotalk --autostart on|off     # 로그인 시 트레이로 자동 실행 (카카오톡 설정의 "자동 실행"과 같은 설정)
 kakaotalk --kill                 # 강제 종료
 kakaotalk --reset                # 카카오톡 데이터 전체 삭제 후 초기화
+kakaotalk --report               # 문제 보고용 환경 정보 (이슈에 붙여넣기)
 kakaotalk --help
 ```
 

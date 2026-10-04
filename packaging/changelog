@@ -1,3 +1,15 @@
+kakaotalk-debian-wrapper (0.3.3) unstable; urgency=medium
+
+  * Launcher: kakaotalk --report prints the environment for bug reports
+    (distribution, desktop, session, input method, DPI, portal, Wine, prefix,
+    settings), with the home folder and user name hidden.
+  * Launcher: don't exit silently when gsettings is installed without the
+    GNOME schemas and no Xft.dpi is set (DPI detection failed under set -e).
+  * GitHub issue templates for bug reports and compatibility reports.
+  * README: shorter install steps, manual APT setup folded away.
+
+ -- kakaotalk-debian-wrapper contributors  Sun, 04 Oct 2026 18:30:00 +0900
+
 kakaotalk-debian-wrapper (0.3.2) unstable; urgency=medium
 
   * Updates through APT: the package registers the project's signed APT

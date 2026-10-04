@@ -126,7 +126,8 @@ detect_dpi() {
     dpi=$(xrdb -query 2>/dev/null | awk '/^Xft.dpi:/ {print int($2)}')
     if [ -z "$dpi" ] && command -v gsettings >/dev/null; then
         scale=$(gsettings get org.gnome.desktop.interface scaling-factor 2>/dev/null | awk '{print $NF}')
-        text=$(gsettings get org.gnome.desktop.interface text-scaling-factor 2>/dev/null)
+        # 스키마가 없으면 gsettings가 실패한다. set -e로 런처가 끝나지 않게 한다
+        text=$(gsettings get org.gnome.desktop.interface text-scaling-factor 2>/dev/null) || text=
         dpi=$(awk -v s="${scale:-0}" -v t="${text:-1}" 'BEGIN { if (s < 1) s = 1; printf "%d", 96 * s * t + 0.5 }')
     fi
     echo "${dpi:-96}"
@@ -407,6 +408,61 @@ set_autostart() {
     esac
 }
 
+# D-Bus 서비스 상태: 실행 중 | 필요할 때 실행됨 | 없음
+dbus_name_state() {
+    command -v dbus-send >/dev/null || { echo "확인 불가 (dbus-send 없음)"; return; }
+    names=$(dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus.ListNames 2>/dev/null) || { echo "확인 불가 (세션 버스 없음)"; return; }
+    if printf '%s' "$names" | grep -q "\"$1\""; then echo "실행 중"; return; fi
+    names=$(dbus-send --session --print-reply --dest=org.freedesktop.DBus /org/freedesktop/DBus \
+        org.freedesktop.DBus.ListActivatableNames 2>/dev/null) || names=
+    if printf '%s' "$names" | grep -q "\"$1\""; then echo "필요할 때 실행됨"; else echo "없음"; fi
+}
+
+# 문제 보고용 환경 정보. 홈 폴더 경로는 ~로 바꿔서 출력한다.
+report() {
+    exe=$(find_exe || true)
+    im=$(find_im || true)
+    {
+        echo "### 환경"
+        echo "- 패키지: $(dpkg-query -W -f='${Version}' "$APP" 2>/dev/null || echo '설치 안 됨 (소스에서 실행)')"
+        echo "- 배포판: $( (. /etc/os-release 2>/dev/null && echo "${PRETTY_NAME:-?}") || echo '?'), 커널 $(uname -r)"
+        echo "- 데스크톱: ${XDG_CURRENT_DESKTOP:-?} / 세션 ${XDG_SESSION_TYPE:-?}$([ -n "${WAYLAND_DISPLAY:-}" ] && echo ' (Wayland, 카카오톡은 XWayland)')"
+        echo "- 입력기: ${im:-감지 안 됨} / XMODIFIERS=${XMODIFIERS:-없음} / GTK_IM_MODULE=${GTK_IM_MODULE:-없음} / QT_IM_MODULE=${QT_IM_MODULE:-없음}"
+        echo "- 화면 DPI: $(detect_dpi)"
+        if command -v glxinfo >/dev/null; then
+            echo "- OpenGL: $(glxinfo -B 2>/dev/null | sed -n 's/^OpenGL renderer string: //p')"
+        fi
+        echo "- 한글 글꼴(Noto Sans CJK KR): $(fc-list 2>/dev/null | grep -c 'Noto Sans CJK KR') 개"
+        echo "- 파일 선택 창 포털: $(dbus_name_state org.freedesktop.portal.Desktop)"
+        echo "- 파일 관리자(FileManager1): $(dbus_name_state org.freedesktop.FileManager1)"
+        case "${XDG_CURRENT_DESKTOP:-}" in
+            *GNOME*)
+                if gnome-extensions list --enabled 2>/dev/null | grep -qi appindicator; then
+                    echo "- GNOME 트레이 확장: 켜짐"
+                else
+                    echo "- GNOME 트레이 확장: 꺼짐 또는 없음"
+                fi ;;
+        esac
+        echo
+        echo "### Wine / 카카오톡"
+        echo "- Wine: $(wine --version 2>/dev/null || echo '?') ($(command -v wine))"
+        echo "- prefix: $([ -f "$WINEPREFIX/system.reg" ] && echo '있음' || echo '없음'), 설정 버전 $(cat "$APP_HOME/.tweaks-version" 2>/dev/null || echo '?')"
+        echo "- 카카오톡: ${exe:-설치 안 됨}"
+        echo "- Z: 드라이브: $([ -e "$WINEPREFIX/dosdevices/z:" ] && echo '있음' || echo '없음')"
+        echo "- 자동 실행: $(if [ -n "$(autostart_value)" ]; then echo on; else echo off; fi)"
+        echo "- 크래시 덤프: $(find "$WINEPREFIX/drive_c/crashdumps" -name '*.mdmp' 2>/dev/null | wc -l) 개"
+        echo "- 실행 중: $(if prefix_running; then echo 예; else echo 아니오; fi)"
+        echo
+        echo "### 설정 ($CONF)"
+        if [ -f "$CONF" ] && grep -q '^[^#[:space:]]' "$CONF"; then
+            grep '^[^#[:space:]]' "$CONF" | sed 's/^/    /'
+        else
+            echo "    (기본값)"
+        fi
+    } | sed -e "s|$HOME|~|g" -e "s|/users/${USER:-$(id -un)}/|/users/<사용자>/|g"
+}
+
 usage() {
     cat <<EOF
 사용법: kakaotalk [옵션] [카카오톡 인자...]
@@ -419,6 +475,7 @@ usage() {
   --winecfg              Wine 설정 열기
   --kill                 카카오톡과 Wine 프로세스 강제 종료
   --reset [--yes]        카카오톡 데이터(Wine prefix) 전체 삭제 후 초기화
+  --report               문제 보고용 환경 정보 출력 (이슈에 붙여넣기)
   --help                 이 도움말
 
 설정 파일: $CONF
@@ -441,6 +498,7 @@ case "${1:-}" in
         [ -n "$(autostart_value)" ] || exit 0
         set -- -bystartup ;;
     --reset)   reset_prefix "${2:-}"; exit ;;
+    --report)  report; exit ;;
     --config)  edit_config ;;
     --winecfg) exec winecfg ;;
     --kill)    exec wineserver -k ;;

@@ -9,6 +9,17 @@
 Debian/Ubuntu에서 Windows용 카카오톡을 **설치 한 번으로 자연스럽게** 쓰기 위한 비공식 래퍼입니다.
 패치한 Wine을 함께 넣은 `.deb` 하나로 설치, 한글 폰트와 입력기 설정, 메뉴와 아이콘, `kakaotalk://` 링크까지 처리합니다.
 
+<table>
+<tr>
+<td width="32%"><img src="docs/images/chat-hangul.png" alt="카카오톡 대화창에서 한글 입력 중"></td>
+<td><img src="docs/images/file-chooser.png" alt="카카오톡 파일 첨부 창이 리눅스(KDE) 파일 선택 창으로 열린 모습"></td>
+</tr>
+<tr>
+<td align="center">한글 입력 (fcitx5)</td>
+<td align="center">파일 첨부 창이 리눅스 파일 선택 창으로</td>
+</tr>
+</table>
+
 > **비공식 프로젝트입니다.** 카카오(Kakao Corp.)와 관련이 없고, 카카오톡 프로그램은 포함하지 않습니다.
 > 카카오톡은 처음 실행할 때 **카카오 공식 서버**에서 받아 설치하며, 설치 화면에서 카카오 이용약관을 직접 확인합니다.
 

@@ -11,25 +11,15 @@
 - 저장소 토픽, Discussions, 이슈 템플릿까지 공개 준비 끝. 다음은 블로그(Tistory)와 GeekNews 소개
 - 작업 규칙과 주의점은 저장소 루트의 `CLAUDE.md`를 먼저 읽을 것
 
-## 진행 중: 우클릭 메뉴 클릭이 안 됨 (2026-10-18 보고)
+## 다음 릴리스에 넣을 것 (changelog로 옮길 항목)
 
-- **증상**: 새 Qt 버전(KakaoTalkUI, 베타)에서 우클릭 메뉴가 뜨지만 **메뉴 안의 어떤 항목을 눌러도 반응이 없음**.
-  채팅방 알림 켜기/끄기도 우클릭 메뉴라 안 됨. 환경: KDE Plasma(사용자 PC). 예전 UI(KakaoTalk.exe)에서 같은지는 아직 확인 안 함
-- **로그** (`KAKAOTALK_DEBUG=1`, 기본 채널): 클릭 시점에 err/예외 없음. 시작 때 나오는 무해한 오류만 있음
-  (winemenubuilder 꺼 둠, Kerberos 없음, icuuc 포워드, 앱이 잡는 wil::ResultException)
-- **가설 1 (유력)**: 패치 0002. Qt는 반투명 GL 창에 `DwmEnableBlurBehindWindow`를 부르고, 0002는 그 창의 GL 표면을 만들 때
-  `x11drv_client_surface_create_alpha` → `set_window_visual(argb)`로 **whole_window를 지우고 다시 만든다**(`window.c` `set_window_visual`).
-  팝업 메뉴는 이미 화면에 떠서 마우스를 잡은(capture) 상태에서 첫 프레임 때 이 일이 일어나므로, 새 X 창에 클릭이 안 가거나
-  Wine의 창 상태(매핑, 입력 마스크, capture)가 어긋날 수 있음. 알림 팝업은 클릭할 일이 없어서 지금까지 안 드러났을 수 있음
-- **가설 2**: 반투명(layered) 창의 입력 처리. 투명한 픽셀은 클릭이 통과하도록 Wine이 모양(shape)을 잡는데,
-  ARGB로 바뀐 창에서 이게 잘못 계산되어 메뉴 전체가 클릭 통과일 수 있음
-- **다음 할 일 (로컬에서)**
-  1. 예전 UI 카카오톡에서도 같은지 확인 (Wine 문제인지 베타 문제인지)
-  2. `tests/qt-popup/`의 Qt6 테스트 앱으로 카카오톡 없이 재현 (위젯 `QMenu` windows11 스타일, QML `Popup.Window`)
-  3. 재현되면 0002를 뺀 빌드로 비교: `patches/0002-*.patch`를 잠시 옮기고 `DEST=runners/wine-no0002 scripts/build-wine.sh`
-     (작업 폴더가 `build/wine-11.0-release`로 같으므로 `build/`의 해당 폴더를 지우거나 FLAVOR를 바꿔서)
-  4. 0002가 원인이면: 이미 매핑된 창은 whole_window를 다시 만들지 말고 처음부터 ARGB로 만들기(창 생성/표시 전에 blur-behind 속성 확인),
-     또는 다시 만든 뒤 capture/매핑 상태를 복원. 확인용 로그 채널: `KAKAOTALK_WINEDEBUG="err+all,+win,+event,+x11drv,+opengl"`
+- **우클릭 메뉴 클릭이 안 됨 (새 Qt 버전) → 패치 0008, 사용자 PC(KDE Plasma Wayland)에서 해결 확인 (2026-10-18)**.
+  카카오톡 메뉴 창은 `WS_CAPTION`이 있는 `WS_EX_NOACTIVATE` 팝업이라 Wine이 창 관리자가 관리하는 창으로 만들고 `WM_TAKE_FOCUS`를 붙였음.
+  클릭하면 KWin이 메뉴를 활성화하고 Wine이 따라가서 Qt가 팝업을 닫음 → 버튼 떼기가 메인 창으로 가서 항목이 실행되지 않았음.
+  0008: 활성화 불가 창은 ICCCM "No Input" 모델, 창 관리자가 활성화해도 foreground로 따라가지 않음.
+  재현용: `tests/qt-popup/menu_widgets.py windows11 kakao` (KWin X11에서는 힌트까지만 확인 가능, 메뉴가 닫히는 단계는 Wayland에서만)
+- 런처: `KAKAOTALK_WINE`에 상대 경로를 줘도 동작
+- 남은 확인: 예전 UI(KakaoTalk.exe)의 메뉴, 다른 팝업(이모티콘, 프로필 등)
 
 ## 0.4.0: 환경 지원 넓히기
 
@@ -68,3 +58,4 @@
 | 0005 리눅스 파일 선택 창(portal) | 호스트 연동 | 레지스트리 `HostFileChooser` | 논의 필요 (큰 기능) |
 | 0006 폴더 선택도 리눅스 창으로 | 호스트 연동 | `HostFileChooser` | 0005와 함께 |
 | 0007 끌어다 놓기/붙여넣기 경로 | 범용 수정 + 정책 | 드라이브로 닿지 않는 경로일 때만 (Z:가 있으면 변화 없음) | 링크 역추적 부분은 가능 |
+| 0008 활성화 불가 창에 포커스 안 줌 | 범용 버그 수정 | `WS_EX_NOACTIVATE` 창 | 적합 (작음) |

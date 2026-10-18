@@ -15,6 +15,8 @@ SETUP_URL_DEFAULT="https://app-pc.kakaocdn.net/talk/win32/x64/KakaoTalk_Setup.ex
 
 # Wine 선택: KAKAOTALK_WINE > 패키지 동봉 Wine > 시스템 wine
 if [ -n "${KAKAOTALK_WINE:-}" ]; then
+    # 실행 직전에 카카오톡 폴더로 cd하므로 상대 경로는 절대 경로로 바꾼다
+    KAKAOTALK_WINE="$(cd "$KAKAOTALK_WINE" && pwd)" || exit 1
     export PATH="$KAKAOTALK_WINE/bin:$PATH"
 elif [ -x "$BUNDLED_WINE/bin/wine" ]; then
     export PATH="$BUNDLED_WINE/bin:$PATH"

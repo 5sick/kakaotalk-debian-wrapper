@@ -1,0 +1,75 @@
+--- a/dlls/winex11.drv/window.c
++++ b/dlls/winex11.drv/window.c
+@@ -1107,6 +1107,18 @@
+     else XDeleteProperty( data->display, data->whole_window, x11drv_atom(_NET_WM_ICON) );
+ }
+ 
++static void set_wm_protocols( Display *display, Window window, BOOL take_focus )
++{
++    Atom protocols[3];
++    int i = 0;
++
++    protocols[i++] = x11drv_atom(WM_DELETE_WINDOW);
++    protocols[i++] = x11drv_atom(_NET_WM_PING);
++    if (take_focus) protocols[i++] = x11drv_atom(WM_TAKE_FOCUS);
++    XChangeProperty( display, window, x11drv_atom(WM_PROTOCOLS),
++                     XA_ATOM, 32, PropModeReplace, (unsigned char *)protocols, i );
++}
++
+ /***********************************************************************
+  *              set_style_hints
+  */
+@@ -1138,10 +1150,16 @@
+     else
+         window_set_net_wm_window_type( data, XATOM__NET_WM_WINDOW_TYPE_NORMAL );
+ 
++    /* Windows that can't be activated use the ICCCM "No Input" model (no input hint,
++     * no WM_TAKE_FOCUS). Otherwise the window manager activates them on click, and
++     * apps that close their popups on deactivation (e.g. Qt menus) close them before
++     * the button release, which then goes to the window below. */
++    set_wm_protocols( data->display, data->whole_window, use_take_focus && !(ex_style & WS_EX_NOACTIVATE) );
++
+     if ((wm_hints = XAllocWMHints()))
+     {
+         wm_hints->flags = InputHint | StateHint | WindowGroupHint;
+-        wm_hints->input = !use_take_focus && !(style & WS_DISABLED);
++        wm_hints->input = !use_take_focus && !(style & WS_DISABLED) && !(ex_style & WS_EX_NOACTIVATE);
+         wm_hints->initial_state = (style & WS_MINIMIZE) ? IconicState : NormalState;
+         wm_hints->window_group = group_leader;
+         if (data->icon_pixmap)
+@@ -1166,17 +1184,10 @@
+ static void set_initial_wm_hints( Display *display, Window window )
+ {
+     long i;
+-    Atom protocols[3];
+     Atom dndVersion = WINE_XDND_VERSION;
+     XClassHint *class_hints;
+ 
+-    /* wm protocols */
+-    i = 0;
+-    protocols[i++] = x11drv_atom(WM_DELETE_WINDOW);
+-    protocols[i++] = x11drv_atom(_NET_WM_PING);
+-    if (use_take_focus) protocols[i++] = x11drv_atom(WM_TAKE_FOCUS);
+-    XChangeProperty( display, window, x11drv_atom(WM_PROTOCOLS),
+-                     XA_ATOM, 32, PropModeReplace, (unsigned char *)protocols, i );
++    set_wm_protocols( display, window, use_take_focus );
+ 
+     /* class hints */
+     if ((class_hints = XAllocClassHint()))
+@@ -1806,6 +1817,8 @@
+     {
+         *foreground = hwnd_from_window( thread_data->display, thread_data->current_state.net_active_window );
+         if (*foreground == old_foreground) *foreground = 0;
++        /* the window manager may still activate windows that can't be activated */
++        if (*foreground && (NtUserGetWindowLongW( *foreground, GWL_EXSTYLE ) & WS_EX_NOACTIVATE)) *foreground = 0;
+     }
+ 
+     if ((data = get_win_data( hwnd )))
+@@ -2639,6 +2652,7 @@
+             sync_window_opacity( data->display, data->whole_window, 0, 0 );
+         }
+         if (changed & WS_EX_TRANSPARENT) sync_window_style( data );
++        if (changed & WS_EX_NOACTIVATE) set_wm_hints( data );
+         flush = TRUE;
+     }
+ 

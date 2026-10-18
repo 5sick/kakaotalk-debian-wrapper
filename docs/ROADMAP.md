@@ -4,22 +4,18 @@
 
 ## 현재 상태 (2026-10-18)
 
-- **릴리스**: v0.3.3 (main). `kakaotalk --report`, 이슈 템플릿, README 스크린샷과 짧아진 설치 안내.
+- **릴리스**: v0.3.4 (main). 새 Qt 버전 우클릭 메뉴가 KDE에서 동작 안 하던 문제 수정(0008).
+  v0.3.3: `kakaotalk --report`, 이슈 템플릿, README 스크린샷과 짧아진 설치 안내.
   v0.3.2: APT 저장소로 자동 업데이트, 받은 실행 파일 차단, push/PR 검사와 매주 점검(watch) 워크플로.
-  0001~0007 패치: 창 끌기, 투명도, 최소 크기, 폴더 열기, 파일 선택 창(portal), 폴더 선택 창, 끌어다 놓기/붙여넣기.
+  0001~0008 패치: 창 끌기, 투명도, 최소 크기, 폴더 열기, 파일 선택 창(portal), 폴더 선택 창, 끌어다 놓기/붙여넣기, 활성화 불가 창 포커스.
   KDE Plasma 5 X11(Kubuntu 24.04)과 Plasma 6 Wayland(Kubuntu 26.04)에서 사용자가 전체 기능을 확인함
 - 저장소 토픽, Discussions, 이슈 템플릿까지 공개 준비 끝. 다음은 블로그(Tistory)와 GeekNews 소개
 - 작업 규칙과 주의점은 저장소 루트의 `CLAUDE.md`를 먼저 읽을 것
 
-## 다음 릴리스에 넣을 것 (changelog로 옮길 항목)
+## 확인 필요
 
-- **우클릭 메뉴 클릭이 안 됨 (새 Qt 버전) → 패치 0008, 사용자 PC(KDE Plasma Wayland)에서 해결 확인 (2026-10-18)**.
-  카카오톡 메뉴 창은 `WS_CAPTION`이 있는 `WS_EX_NOACTIVATE` 팝업이라 Wine이 창 관리자가 관리하는 창으로 만들고 `WM_TAKE_FOCUS`를 붙였음.
-  클릭하면 KWin이 메뉴를 활성화하고 Wine이 따라가서 Qt가 팝업을 닫음 → 버튼 떼기가 메인 창으로 가서 항목이 실행되지 않았음.
-  0008: 활성화 불가 창은 ICCCM "No Input" 모델, 창 관리자가 활성화해도 foreground로 따라가지 않음.
-  재현용: `tests/qt-popup/menu_widgets.py windows11 kakao` (KWin X11에서는 힌트까지만 확인 가능, 메뉴가 닫히는 단계는 Wayland에서만)
-- 런처: `KAKAOTALK_WINE`에 상대 경로를 줘도 동작
-- 남은 확인: 예전 UI(KakaoTalk.exe)의 메뉴, 다른 팝업(이모티콘, 프로필 등)
+- 0008 이후: 예전 UI(KakaoTalk.exe)의 우클릭 메뉴, 다른 팝업(이모티콘, 프로필 등)의 입력.
+  메뉴 문제 재현용 테스트는 `tests/qt-popup/` (`menu_widgets.py windows11 kakao`)
 
 ## 0.4.0: 환경 지원 넓히기
 

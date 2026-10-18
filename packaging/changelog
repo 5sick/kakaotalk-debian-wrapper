@@ -1,3 +1,15 @@
+kakaotalk-debian-wrapper (0.3.4) unstable; urgency=medium
+
+  * Wine (0008): right-click menu items in the new Qt version (KakaoTalkUI)
+    did nothing under KDE Plasma. The menus are WS_EX_NOACTIVATE windows
+    that the window manager manages; it activated them on click, Qt closed
+    the menu before the button release, and the release went to the main
+    window. Such windows no longer take focus from the window manager.
+  * Launcher: KAKAOTALK_WINE accepts a relative path.
+  * tests/qt-popup: Qt6 popup menu test app for Wine (PySide6 6.10).
+
+ -- kakaotalk-debian-wrapper contributors  Sun, 18 Oct 2026 18:00:00 +0900
+
 kakaotalk-debian-wrapper (0.3.3) unstable; urgency=medium
 
   * Launcher: kakaotalk --report prints the environment for bug reports

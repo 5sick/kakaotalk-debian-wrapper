@@ -12,8 +12,10 @@ Windows 카카오톡을 패치한 Wine 11.0(wow64, X11 드라이버)으로 실�
 | `src/open-helper` | `/usr/lib/kakaotalk-debian-wrapper/open`. winebrowser와 패치된 explorer/shell32가 호출 |
 | `patches/` | Wine 패치 (LGPL-2.1+). `scripts/build-wine.sh`가 번호 순서로 원본 wine-11.0에 적용. 설명은 `patches/README.md` |
 | `scripts/build-wine-docker.sh` | Ubuntu 22.04 컨테이너(glibc 2.35)에서 배포용 Wine 빌드. 결과는 `runners/wine-11.0-release` |
-| `packaging/` | `build-deb.sh`, `test-install.sh`(debian:12/13, ubuntu:22.04/24.04 설치 테스트), `control.in`, `changelog` |
-| `.github/workflows/build.yml` | `v*` 태그 → 빌드, 설치 테스트, 릴리스. `workflow_dispatch`는 릴리스 없이 빌드만 |
+| `packaging/` | `build-deb.sh`, `test-install.sh`(debian:12/13, ubuntu:22.04/24.04/26.04 설치 테스트), `publish-apt.sh`, `control.in`, `changelog` |
+| `.github/workflows/build.yml` | `v*` 태그 → 빌드, 설치 테스트, 릴리스, APT 저장소. `workflow_dispatch`는 릴리스 없이 빌드만 |
+| `.github/workflows/check.yml`, `watch.yml` | push/PR마다 문법·shellcheck·패치 적용 검사 / 매주 설치 파일 주소와 Wine 새 버전 확인 |
+| `tests/qt-popup/` | 카카오톡 로그인 없이 Qt6 팝업 메뉴 입력을 재현하는 테스트 앱 (Windows Python + PySide6 6.10) |
 
 ## 규칙
 
@@ -37,6 +39,7 @@ Windows 카카오톡을 패치한 Wine 11.0(wow64, X11 드라이버)으로 실�
 - 카카오톡 설치 폴더 파일은 서명된 해시 목록(`version.info`)으로 검사되므로 **절대 수정하지 않습니다.** 고칠 것은 Wine 쪽에서 고칩니다.
 - 기본값으로 `Z:` 드라이브를 없앴습니다. 리눅스 경로를 Windows 경로로 못 바꾸는 상황은 링크(`C:\Linux\`, 0005; `C:\windows\temp\host-files\`, 0007)로 해결합니다.
 - 공식 설치 파일: `talk/win32/x64/KakaoTalk_Setup.exe`(예전 UI, 런처 기본값). 새 Qt6 버전(KakaoTalkUI)은 공식 베타 배포본으로 `kakaotalk --install 파일`로 설치합니다. 두 버전 모두 확인해야 합니다.
+- Qt 팝업(메뉴)은 `WS_EX_NOACTIVATE`라 창 관리자가 활성화하면 Qt가 바로 닫습니다(0008). 팝업 입력 문제는 `tests/qt-popup/`으로 먼저 재현합니다.
 - GUI 동작은 화면이 있어야 확인됩니다. 설치 화면 같은 것은 Xvfb + `xwd`로 스크린샷을 찍어 확인할 수 있지만, 카카오톡 로그인 이후 기능은 사용자가 실제 데스크톱에서 확인합니다.
 - **클라우드 세션**: 네트워크 정책상 `dl.winehq.org`, `gitlab.winehq.org`, Launchpad, Debian/Ubuntu 소스 서버가 막혀 있습니다.
   Wine 소스는 `git clone --depth 1 --branch wine-11.0 https://github.com/wine-mirror/wine`로 받아 `git archive`로 `build/wine-11.0.tar.xz`를 만듭니다.

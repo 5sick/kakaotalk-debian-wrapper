@@ -1,7 +1,7 @@
 # Qt6 팝업 메뉴 클릭 테스트
 
 카카오톡(새 Qt 버전) 우클릭 메뉴에서 클릭이 먹지 않는 문제를 카카오톡 로그인 없이 재현하기 위한 작은 Qt6 앱입니다.
-`docs/ROADMAP.md`의 "진행 중: 우클릭 메뉴 클릭이 안 됨"을 같이 보세요.
+원인과 수정은 `patches/README.md`의 0008을 보세요 (창 관리자가 메뉴를 활성화해서 Qt가 버튼을 떼기 전에 메뉴를 닫음).
 
 | 파일 | 내용 |
 |---|---|
@@ -42,4 +42,4 @@ $W/bin/wine C:/python/python.exe C:/menu_qml.py
 
 자동 확인: Xvfb에서 XTest로 우클릭/클릭을 보내고 출력을 보면 됩니다.
 
-비교할 것: 패치 0002를 뺀 Wine 빌드, 스타일별(`windows11` / `fusion`), 위젯 메뉴 / QML 메뉴.
+확인할 것: `menu_widgets.py windows11 kakao`(카카오톡 메뉴와 같은 창 속성)에서 항목을 누르면 `TRIGGERED`가 찍히는지. 0008이 없는 Wine에서는 KWin에서 찍히지 않습니다.
